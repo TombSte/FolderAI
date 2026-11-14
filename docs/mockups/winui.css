@@ -1,0 +1,252 @@
+/* Concept 05: HTML interpretation of WinUI 3 / Windows 11, not native WinUI controls. */
+:root {
+  --background: #b9d5f3;
+  --surface: #ffffff;
+  --sidebar: #eef2f7;
+  --soft: #f7f9fc;
+  --hover: #e9eef5;
+  --text: #20242b;
+  --secondary: #505a68;
+  --muted: #737f8e;
+  --line: #e9edf2;
+  --border: #d5dce5;
+  --accent: #005fb8;
+  --accent-soft: #e7f1fc;
+  --accent-border: #c8ddf3;
+  --green: #31745a;
+  --green-soft: #edf5ef;
+  --amber: #8b6529;
+  --amber-soft: #fff8e9;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+:root[data-theme="dark"] {
+  --background: #101d34;
+  --surface: #282b30;
+  --sidebar: #20252d;
+  --soft: #2c3037;
+  --hover: #353c46;
+  --text: #f0f2f5;
+  --secondary: #c3cad5;
+  --muted: #9ca6b5;
+  --line: #ffffff0d;
+  --border: #ffffff18;
+  --accent: #74c7ff;
+  --accent-soft: #253f56;
+  --accent-border: #365c7a;
+  --green: #9cc7ac;
+  --green-soft: #263a30;
+  --amber: #e0bc78;
+  --amber-soft: #3d3526;
+}
+body.winui-concept {
+  display: flow-root;
+  min-height: 100dvh;
+  background: radial-gradient(ellipse at 25% 4%, #f2f7ff 0, transparent 53%), radial-gradient(ellipse at 83% 83%, #92b3f2 0, transparent 56%), linear-gradient(128deg, #bfddf7, #b9d0f5 52%, #ccdcf7);
+  background-attachment: fixed;
+}
+[data-theme="dark"] body.winui-concept { background: radial-gradient(ellipse at 15% 3%, #234574 0, transparent 50%), radial-gradient(ellipse at 80% 85%, #183c6b 0, transparent 50%), linear-gradient(135deg, #0d1c32, #142846); }
+.winui-concept .unified-window { width: calc(100% - 64px); height: min(980px, calc(100dvh - 120px)); margin-top: 22px; border-radius: 8px; border: 1px solid #ffffffb3; background: #edf2f8ed; box-shadow: 0 26px 70px #1c355d2e, 0 4px 12px #1c355d10; grid-template-rows: 43px minmax(0, 1fr) 28px; -webkit-backdrop-filter: blur(35px); backdrop-filter: blur(35px); }
+.winui-concept .window-header { background: #edf2f875; padding: 0 0 0 16px; border-bottom: 0; }
+.winui-concept .window-identity { gap: 9px; }
+.winui-concept .window-identity strong { font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.winui-concept .app-symbol { width: 22px; height: 22px; border-radius: 5px; background: linear-gradient(145deg, #1685e9, #0064bd); box-shadow: inset 0 1px 0 #ffffff20; }
+.winui-concept .app-symbol .icon { width: 15px; height: 15px; }
+.winui-concept .window-location { font-size: 11px; font-weight: 400; color: var(--secondary); }
+.winui-concept .window-actions { height: 100%; gap: 5px; align-items: center; }
+.winui-concept .window-actions > .icon-button { width: 28px; height: 28px; border-radius: 4px; }
+.winui-concept .window-actions > .icon-button[aria-pressed="true"] { color: var(--secondary); background: transparent; }
+.winui-concept .window-actions > .icon-button:hover { background: #00000006; }
+.caption-controls { display: flex; height: 100%; margin-left: 12px; }
+.caption-button { width: 45px; height: 100%; display: grid; place-items: center; color: var(--text); border-radius: 0; }
+.caption-button svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1; }
+.caption-button:hover { background: #0000000a; }
+.caption-button.caption-close:hover { background: #c42b1c; color: white; }
+.winui-concept .unified-body { grid-template-columns: 216px minmax(0, 1fr); padding: 0 6px 0 0; }
+.winui-concept .navigation { background: #eaf0f724; border-right: 0; padding: 22px 12px 12px; }
+.winui-concept .workspace-identity { padding: 0 9px 24px; gap: 10px; }
+.winui-concept .user-avatar { border-radius: 50%; background: #dce8f6; color: #587798; width: 34px; height: 34px; font-size: 11px; }
+.winui-concept .workspace-identity strong { font-size: 12px; font-weight: 600; }
+.winui-concept .workspace-identity small { font-size: 10px; }
+.winui-concept .nav-section { margin-bottom: 19px; }
+.winui-concept .nav-section h2 { font-size: 10px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--secondary); }
+.winui-concept .group-label { font-size: 10px; margin-top: 10px; }
+.winui-concept .nav-row { position: relative; min-height: 36px; font-size: 12px; border-radius: 4px; padding: 8px 11px; gap: 12px; }
+.winui-concept .nav-row.active { background: #c6d5e750; color: var(--text); font-weight: 500; }
+.winui-concept .nav-row.active::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent); }
+.winui-concept .nav-row > .icon { stroke-width: 1.5; }
+.winui-concept .nav-row small, .winui-concept .nav-row kbd { font-size: 10px; }
+.winui-concept .tag-dot { width: 7px; height: 7px; }
+.winui-concept .nav-bottom { padding-left: 10px; padding-right: 10px; }
+.winui-concept .disk-label { font-size: 10px; }
+.winui-concept .disk-label small, .winui-concept .nav-bottom > small { font-size: 9px; }
+.winui-concept .disk-meter { height: 3px; background: #d3dce9; }
+.winui-concept .disk-meter i { background: #6d9bc9; }
+.winui-concept .unified-workspace { background: var(--surface); border: 1px solid #dce3ee; border-radius: 8px; overflow: hidden; }
+.winui-concept .workspace-tabs { order: 0; min-height: 39px; padding: 0 10px; background: #eaf0f6; border-bottom: 1px solid #dde5ef; gap: 3px; }
+.winui-concept .workspace-tab { min-height: 33px; min-width: 154px; padding: 0 12px; margin: 6px 0 -1px; border: 0; border-radius: 6px 6px 0 0; font-size: 11px; color: var(--secondary); }
+.winui-concept .workspace-tab.active { background: var(--surface); border: 1px solid #dce3ed; border-bottom: 1px solid var(--surface); color: var(--text); }
+.winui-concept .workspace-tab > .icon { color: #ad8428; }
+.winui-concept .workspace-tabs > .icon-button { width: 29px; height: 27px; margin-top: 4px; }
+.winui-concept .view-controls { gap: 2px; }
+.winui-concept .view-controls .icon-button { width: 27px; height: 26px; border-radius: 4px; }
+.win-commandbar { order: 1; display: flex; align-items: center; gap: 6px; padding: 8px 15px; min-height: 49px; border-bottom: 1px solid var(--line); }
+.win-commandbar > button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; height: 30px; border-radius: 4px; color: var(--secondary); }
+.win-commandbar > button:hover { background: var(--hover); }
+.win-commandbar .command-new { padding: 0 9px; }
+.win-commandbar .command-icon { width: 32px; }
+.win-commandbar .command-text { padding: 0 9px; }
+.win-commandbar .icon { width: 16px; height: 16px; stroke-width: 1.4; }
+.win-commandbar .command-new > .icon { width: 17px; color: var(--accent); }
+.win-commandbar .command-chevron .icon { width: 9px; height: 9px; }
+.command-separator { width: 1px; height: 19px; background: var(--line); margin: 0 5px; }
+.commandbar-spacer { flex: 1; }
+.command-local { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--muted); white-space: nowrap; }
+.command-local .icon { width: 12px; height: 12px; color: var(--green); }
+.winui-concept .workspace-toolbar { order: 2; min-height: 66px; padding: 0 18px; gap: 17px; border-bottom-color: var(--line); }
+.winui-concept .path-controls { gap: 9px; }
+.winui-concept .path-controls > .icon-button { width: 28px; height: 28px; }
+.winui-concept .path { font-size: 12px; gap: 9px; }
+.winui-concept .path button { font-weight: 500; }
+.winui-concept .unified-search { height: 37px; border-radius: 4px; border: 1px solid #d7dde6; border-bottom-color: #929dab; box-shadow: none; background: #fcfdff; padding: 3px 4px 3px 11px; gap: 8px; }
+.winui-concept .unified-search:focus-within { border-color: #c2d1e3; border-bottom: 2px solid var(--accent); box-shadow: none; }
+.winui-concept .unified-search > input { font-size: 12px; letter-spacing: 0; }
+.winui-concept .search-symbol { color: var(--secondary); }
+.winui-concept .mode-trigger { border-radius: 3px; color: var(--accent); background: var(--accent-soft); padding: 4px 7px; min-height: 25px; font-size: 10px; font-weight: 500; }
+.winui-concept .filter-trigger { padding: 4px; border-radius: 3px; }
+.winui-concept .submit-search { width: 27px; height: 27px; border-radius: 3px; background: #005fb8; }
+.winui-concept .submit-search:hover { background: #126cc1; }
+.winui-concept .search-popover { border-radius: 8px; background: #f9fbfe; border: 1px solid #d9e1eb; box-shadow: 0 10px 30px #263c5a24, 0 2px 5px #263c5a0b; padding: 5px; }
+.winui-concept .popover-label { font-size: 10px; color: var(--secondary); font-weight: 600; padding-top: 9px; }
+.winui-concept .mode-popover > button { border-radius: 4px; padding: 10px; position: relative; }
+.winui-concept .mode-popover > button[aria-checked="true"] { background: #e7eff8; }
+.winui-concept .mode-popover > button[aria-checked="true"]::before { content: ""; width: 3px; height: 17px; background: var(--accent); border-radius: 2px; position: absolute; left: 0; top: 18px; }
+.winui-concept .choice-icon { width: 28px; height: 28px; border: 0; background: transparent; color: var(--secondary); }
+.winui-concept .mode-popover strong { font-size: 12px; font-weight: 500; }
+.winui-concept .mode-popover small { font-size: 10px; }
+.winui-concept .popover-note { font-size: 9px; border-color: var(--line); padding-top: 11px; }
+.winui-concept .filter-popover label { font-size: 12px; }
+.winui-concept .search-context { order: 3; background: #f6f9fd; min-height: 40px; padding: 7px 19px; }
+.winui-concept .context-label, .winui-concept .scope-subfolders, .winui-concept .route-indicator { font-size: 10px; }
+.winui-concept .context-chip { font-size: 10px; padding: 2px 6px; border-radius: 4px; border-color: #dbe4ef; }
+.winui-concept .workspace-content { order: 4; grid-template-columns: minmax(0, 1fr) 347px; }
+.winui-concept .explorer-content { padding: 25px 23px 17px; }
+.winui-concept .section-kicker { font-size: 10px; text-transform: none; letter-spacing: 0; color: var(--muted); margin-bottom: 6px; }
+.winui-concept h1 { font-size: 25px; font-weight: 600; letter-spacing: -.6px; }
+.winui-concept .result-count { border-radius: 4px; font-size: 11px; background: #f3f6fb; }
+.winui-concept .results-title { margin-bottom: 23px; }
+.winui-concept .results-title p { font-size: 11px; }
+.winui-concept .results-title > .icon-button { border-radius: 4px; }
+.winui-concept .file-column-labels { font-size: 10px; }
+.winui-concept .result-row { padding: 16px 9px; }
+.winui-concept .result-row.selected { background: #e4effb; border-radius: 4px; box-shadow: inset 0 0 0 1px #d5e6f9; }
+.winui-concept .result-file-name { font-size: 12px; font-weight: 500; }
+.winui-concept .result-path { font-size: 10px; margin-top: 3px; }
+.winui-concept .result-passage { font-size: 11px; line-height: 1.8; margin-top: 8px; }
+.winui-concept .result-row-size, .winui-concept .result-row-date { font-size: 10px; }
+.winui-concept .result-source-number { font-size: 9px; bottom: 7px; }
+.winui-concept .result-file-icon { border-radius: 3px; background: #fff; border-color: #e0e3e8; color: #bf5147; font-size: 7px; box-shadow: 0 1px 2px #283b5908; }
+.winui-concept .result-file-icon.md, .winui-concept .result-file-icon.txt { background: #fff; border-color: #dde3eb; color: #6289b9; }
+.winui-concept .result-file-icon.png { background: #f5f0fc; color: #9675b5; }
+.winui-concept .result-file-icon.folder { background: none; border: 0; box-shadow: none; color: #dba133; }
+.winui-concept .result-file-icon.folder .icon { fill: #f8d568; stroke-width: 1.2; }
+.winui-concept mark { background: #d8eaff; color: #174f89; }
+.winui-concept .exploration-hint { border-style: solid; background: #fafcff; border-color: #e4eaf2; border-radius: 4px; padding: 13px; margin-top: 21px; }
+.winui-concept .exploration-hint strong { font-size: 11px; font-weight: 500; }
+.winui-concept .exploration-hint p, .winui-concept .exploration-hint button { font-size: 10px; }
+.winui-concept .content-footnote { font-size: 9px; }
+.winui-concept .context-panel { border-left: 1px solid #e3e9f1; background: #f9fbfe; }
+.winui-concept .context-panel-tabs { padding: 8px 14px; min-height: 48px; gap: 6px; }
+.winui-concept .context-panel-tabs > button:not(.icon-button) { border-radius: 0; font-size: 11px; position: relative; padding: 6px 6px 8px; }
+.winui-concept .context-panel-tabs > button.active { color: var(--text); background: none; }
+.winui-concept .context-panel-tabs > button.active::after { content: ""; position: absolute; height: 3px; border-radius: 2px; background: var(--accent); bottom: 0; left: 6px; right: 6px; }
+.winui-concept .context-panel-scroll { padding: 19px; }
+.winui-concept .answer-state { font-size: 9px; margin-bottom: 16px; }
+.winui-concept #answer-content h2 { font-size: 22px; font-weight: 600; letter-spacing: -.5px; }
+.winui-concept .answer-intro { font-size: 12px; line-height: 1.85; }
+.winui-concept .condition-card { border-radius: 4px; border-color: #e2e8f0; background: #fff; padding: 12px 10px; }
+.winui-concept .condition-label { font-size: 9px; }
+.winui-concept .condition-card > strong { font-size: 31px; font-weight: 600; letter-spacing: -1px; }
+.winui-concept .condition-card p { font-size: 10px; }
+.winui-concept .attention-note { border: 1px solid #eee2c9; border-radius: 4px; padding: 11px; }
+.winui-concept .attention-note strong { font-size: 11px; font-weight: 500; }
+.winui-concept .attention-note p { font-size: 10px; }
+.winui-concept .source-reference { border-radius: 3px; }
+.winui-concept .research-details summary { font-size: 10px; }
+.winui-concept .follow-up { border-radius: 4px; background: #fff; border-color: #dce3ed; font-size: 11px; padding: 9px; }
+.winui-concept .answer-disclaimer { font-size: 9px; }
+.winui-concept .privacy-strip strong { font-size: 10px; }
+.winui-concept .privacy-strip div > span { font-size: 9px; }
+.winui-concept .preview-sheet { border-radius: 5px; background: #e9edf3; }
+.winui-concept .selected-file-title { font-size: 14px; }
+.winui-concept .selected-file-path, .winui-concept .selected-note p { font-size: 11px; }
+.winui-concept .selected-file-tags span { border-radius: 3px; }
+.winui-concept .outlined-button { border-radius: 4px; box-shadow: 0 1px 2px #253e5c08; font-size: 11px; }
+.winui-concept .unified-status { background: #edf2f870; font-size: 9px; border-top: 0; padding: 0 14px; }
+.winui-concept .unified-status kbd { border-radius: 3px; font-size: 9px; }
+.winui-concept .concept-caption { font-size: 9px; color: #536a89; margin-top: 10px; }
+.winui-concept .concept-caption > span:last-child { white-space: nowrap; }
+.winui-concept dialog { border-radius: 8px; box-shadow: 0 22px 65px #0003; border-color: #d8e0ea; }
+.winui-concept .dialog-header h2 { font-size: 20px; font-weight: 600; }
+.winui-concept .dialog-note { border-radius: 4px; }
+.winui-concept .unified-toast { border-radius: 5px; }
+.windows-taskbar { height: 50px; position: fixed; z-index: 25; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: #f0f5fbe0; border-top: 1px solid #ffffffa3; -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); color: #38485c; box-shadow: 0 -1px 5px #244b7705; }
+.taskbar-widget { display: flex; align-items: center; gap: 9px; font-size: 11px; }
+.weather-symbol { font-size: 25px; color: #daaa39; }
+.taskbar-widget small { display: block; font-size: 9px; color: #72839a; }
+.taskbar-apps { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; height: 100%; }
+.taskbar-button { width: 39px; height: 39px; border-radius: 4px; display: grid; place-items: center; position: relative; }
+.taskbar-button:hover { background: #ffffff8c; }
+.windows-logo { width: 23px; height: 23px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.windows-logo i { background: #087bd5; }
+.taskbar-search { display: flex; align-items: center; gap: 8px; width: 132px; padding: 5px 11px; border: 1px solid #ffffffb0; border-radius: 18px; background: #dce7f2b0; font-size: 11px; color: #5d718a; }
+.taskbar-search .icon { width: 15px; height: 15px; }
+.explorer-task > .icon { width: 27px; height: 27px; fill: #f8d568; stroke: #d3a441; stroke-width: 1.1; }
+.taskbar-button.active-task { background: #ffffff90; }
+.taskbar-button.active-task::after { content: ""; position: absolute; bottom: 1px; height: 3px; width: 15px; border-radius: 2px; background: #0078d4; }
+.taskbar-tray { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.tray-status svg { width: 58px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.15; stroke-linecap: round; stroke-linejoin: round; }
+.tray-clock { display: block; text-align: right; font-size: 11px; line-height: 1.6; }
+.tray-clock small { display: block; font-size: 9px; }
+.winui-concept .unified-body.sidebar-hidden { grid-template-columns: minmax(0, 1fr); padding-left: 6px; }
+.winui-concept .workspace-content.panel-hidden { grid-template-columns: minmax(0, 1fr); }
+.winui-concept.winui-maximized .unified-window { width: 100%; max-width: none; height: calc(100dvh - 50px); min-height: 0; margin: 0; border-radius: 0; }
+.winui-concept.winui-maximized .concept-caption { display: none; }
+[data-theme="dark"] .winui-concept .unified-window { background: #202731ed; border-color: #9aafcf38; box-shadow: 0 26px 70px #0005; }
+[data-theme="dark"] .winui-concept .window-header, [data-theme="dark"] .winui-concept .unified-status { background: #20273180; }
+[data-theme="dark"] .winui-concept .window-actions > .icon-button:hover, [data-theme="dark"] .winui-concept .caption-button:hover { background: #ffffff0c; }
+[data-theme="dark"] .winui-concept .caption-close:hover { background: #c42b1c; }
+[data-theme="dark"] .winui-concept .navigation { background: #20273130; }
+[data-theme="dark"] .winui-concept .user-avatar { background: #3c5069; color: #c9dbf1; }
+[data-theme="dark"] .winui-concept .nav-row.active { background: #ffffff0c; }
+[data-theme="dark"] .winui-concept .disk-meter { background: #ffffff13; }
+[data-theme="dark"] .winui-concept .unified-workspace { border-color: #ffffff10; }
+[data-theme="dark"] .winui-concept .workspace-tabs { background: #222830; border-color: #ffffff0d; }
+[data-theme="dark"] .winui-concept .workspace-tab.active { border-color: #ffffff13; border-bottom-color: var(--surface); }
+[data-theme="dark"] .winui-concept .unified-search { background: #ffffff08; border-color: #ffffff15; border-bottom-color: #ffffff60; }
+[data-theme="dark"] .winui-concept .unified-search:focus-within { border-bottom-color: var(--accent); }
+[data-theme="dark"] .winui-concept .submit-search { background: #6cc5ff; color: #10354f; }
+[data-theme="dark"] .winui-concept .search-context { background: #ffffff03; }
+[data-theme="dark"] .winui-concept .context-chip { background: #ffffff04; border-color: #ffffff15; }
+[data-theme="dark"] .winui-concept .search-popover { background: #2d3239; border-color: #ffffff18; box-shadow: 0 10px 30px #0005; }
+[data-theme="dark"] .winui-concept .mode-popover > button[aria-checked="true"] { background: #ffffff0c; }
+[data-theme="dark"] .winui-concept .result-count { background: #ffffff06; }
+[data-theme="dark"] .winui-concept .result-row.selected { background: #31516c; box-shadow: inset 0 0 0 1px #9dd6ff10; }
+[data-theme="dark"] .winui-concept .result-file-icon { background: #e9e7e5; border-color: #eee; }
+[data-theme="dark"] .winui-concept .result-file-icon.folder { background: none; border: 0; }
+[data-theme="dark"] .winui-concept mark { background: #325f87; color: #e0efff; }
+[data-theme="dark"] .winui-concept .exploration-hint { background: #ffffff02; border-color: #ffffff10; }
+[data-theme="dark"] .winui-concept .context-panel { background: #252a31; border-color: #ffffff0e; }
+[data-theme="dark"] .winui-concept .condition-card { background: #ffffff04; border-color: #ffffff13; }
+[data-theme="dark"] .winui-concept .attention-note { border-color: #d8af6820; }
+[data-theme="dark"] .winui-concept .follow-up { background: #ffffff04; border-color: #ffffff15; }
+[data-theme="dark"] .winui-concept .concept-caption { color: #bacce4; }
+[data-theme="dark"] .winui-concept dialog { border-color: #ffffff20; }
+[data-theme="dark"] .winui-concept .windows-taskbar { background: #1c2738e8; border-color: #ffffff13; color: #dbe6f4; }
+[data-theme="dark"] .winui-concept .taskbar-widget small { color: #a4b4cb; }
+[data-theme="dark"] .winui-concept .taskbar-search { background: #ffffff0d; border-color: #ffffff08; color: #b5c8df; }
+[data-theme="dark"] .winui-concept .taskbar-button:hover, [data-theme="dark"] .winui-concept .taskbar-button.active-task { background: #ffffff0e; }
+@media (max-width: 1200px) { .winui-concept .unified-body { grid-template-columns: 188px minmax(0, 1fr); } .winui-concept .workspace-content { grid-template-columns: minmax(0, 1fr) 311px; } .winui-concept .workspace-toolbar { padding: 0 15px; gap: 12px; } .winui-concept .explorer-content { padding: 22px 17px 16px; } .winui-concept .context-panel-scroll { padding: 16px; } .winui-concept .condition-label { font-size: 8px; } .winui-concept .command-local { display: none; } }
+@media (max-width: 980px) { .winui-concept .unified-window { width: calc(100% - 24px); margin-top: 12px; height: calc(100dvh - 105px); } .winui-concept .concept-caption { width: calc(100% - 24px); } .winui-concept .unified-body { grid-template-columns: 166px minmax(0, 1fr); } .winui-concept .navigation { padding: 20px 8px 10px; } .winui-concept .workspace-content { grid-template-columns: minmax(0, 1fr) 288px; } .winui-concept .workspace-toolbar { min-height: 98px; gap: 0; padding-top: 5px; padding-bottom: 9px; } .winui-concept .unified-search { flex-basis: 100%; } .winui-concept .window-location { display: none; } .winui-concept .condition-card { width: 100%; } .winui-concept .condition-card + .condition-card { margin-left: 0; } .winui-concept .condition-label { font-size: 10px; } .winui-concept .context-panel-tabs > button:not(.icon-button) { font-size: 10px; } .winui-concept .unified-status { font-size: 8px; } .winui-concept .unified-body.sidebar-hidden { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 740px) { .winui-concept .unified-window { width: 100%; height: 100dvh; min-height: 560px; margin: 0; border-radius: 0; border-left: 0; border-right: 0; } .winui-concept .unified-body { grid-template-columns: 53px minmax(0, 1fr); padding: 0; } .winui-concept .unified-workspace { border-radius: 0; border-right: 0; } .winui-concept .navigation { padding: 14px 5px; } .winui-concept .nav-row { padding: 9px; } .winui-concept .window-header { padding-left: 10px; } .winui-concept .window-identity { gap: 6px; } .winui-concept .window-identity strong { font-size: 11px; } .winui-concept .app-symbol { width: 20px; height: 20px; } .winui-concept .window-actions { gap: 1px; } .winui-concept .window-actions > .icon-button { width: 25px; } .caption-controls { margin-left: 3px; } .caption-button { width: 33px; } .caption-button svg { width: 10px; height: 10px; } .win-commandbar { min-height: 43px; padding: 6px 7px; gap: 2px; } .win-commandbar .command-icon { width: 26px; } .win-commandbar .command-new, .win-commandbar .command-text { padding: 0 5px; font-size: 10px; gap: 5px; } .win-commandbar > .command-separator { margin: 0 2px; } .win-commandbar .command-icon:nth-of-type(4), .win-commandbar .command-icon:nth-of-type(5) { display: none; } .winui-concept .workspace-tabs { min-height: 37px; padding: 0 8px; } .winui-concept .workspace-tab { min-width: 108px; min-height: 31px; padding: 0 7px; font-size: 10px; } .winui-concept .workspace-toolbar { padding-left: 11px; padding-right: 11px; min-height: 91px; } .winui-concept .path { font-size: 11px; } .winui-concept .unified-search { padding-left: 8px; gap: 5px; } .winui-concept .unified-search > input { font-size: 11px; } .winui-concept .mode-trigger { padding: 4px 5px; font-size: 9px; } .winui-concept .filter-trigger { padding: 3px; } .winui-concept .submit-search { width: 25px; height: 25px; } .winui-concept .search-context { padding: 7px 11px; } .winui-concept .context-label, .winui-concept .route-indicator { font-size: 8px; } .winui-concept .context-chip { font-size: 9px; } .winui-concept .workspace-content { display: block; } .winui-concept .explorer-content { padding: 21px 13px 16px; } .winui-concept h1 { font-size: 22px; } .winui-concept .results-title p { font-size: 10px; } .winui-concept .result-path { font-size: 9px; } .winui-concept .result-file-name { font-size: 11px; } .winui-concept .context-panel { border-left: 0; } .winui-concept .condition-card { width: calc(50% - 5px); } .winui-concept .condition-card + .condition-card { margin-left: 5px; } .winui-concept .condition-label { font-size: 9px; } .winui-concept .unified-status { font-size: 7px; padding: 0 8px; } .winui-concept .unified-status kbd { font-size: 7px; } .windows-taskbar { display: none; } .winui-concept .concept-caption { display: none; } .winui-concept.winui-maximized .unified-window { height: 100dvh; } }
+@media (prefers-reduced-transparency: reduce) { .winui-concept .unified-window, .winui-concept .window-header, .winui-concept .navigation, .winui-concept .unified-status, .windows-taskbar { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--sidebar); } }
+@media (forced-colors: active) { .winui-concept .unified-window, .winui-concept .unified-workspace, .winui-concept .unified-search, .winui-concept .search-popover, .winui-concept .condition-card { border-color: CanvasText; box-shadow: none; } .winui-concept .nav-row.active::before, .winui-concept .context-panel-tabs > button.active::after { background: Highlight; } .winui-concept .result-row.selected { outline: 1px solid Highlight; box-shadow: none; } .windows-taskbar { border-color: CanvasText; } .windows-logo i { background: ButtonText; } }

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FolderAI — Ricerca e AI · Concept 02</title>
+  <link rel="stylesheet" href="./mockups.css">
+  <script src="./mockups.js" defer></script>
+</head>
+<body data-page="ai">
+  <div class="app-window">
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <a class="titlebar-brand" href="./folderai-explorer.html"><span class="brand-mark" data-icon="layers"></span>FolderAI</a>
+      </div>
+      <span class="titlebar-caption">Meno ricerca. Più contesto.</span>
+      <div class="titlebar-right">
+        <nav class="concept-nav" aria-label="Mockup disponibili"><a href="./folderai-explorer.html">Explorer</a><a href="./folderai-ai.html" aria-current="page">Con AI</a></nav>
+        <button class="icon-button" data-action="theme" aria-label="Passa al tema scuro" title="Cambia tema"><span data-icon="moon"></span></button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar" aria-label="Navigazione principale">
+        <div class="sidebar-account"><div class="avatar" aria-hidden="true">ST</div><div><div class="account-name">Il mio spazio</div><div class="account-sub">Personale · locale</div></div></div>
+        <div class="sidebar-section">
+          <div class="section-label">Esplora</div>
+          <a class="nav-item" href="./folderai-explorer.html" title="Home"><span data-icon="home"></span><span class="nav-text">Home</span></a>
+          <button class="nav-item" data-demo-message="Recenti: gli elementi aperti di recente comparirebbero qui." title="Recenti"><span data-icon="clock"></span><span class="nav-text">Recenti</span></button>
+          <a class="nav-item is-active" href="./folderai-ai.html" aria-current="page" title="Ricerca intelligente"><span data-icon="sparkles"></span><span class="nav-text">Ricerca intelligente</span></a>
+        </div>
+        <div class="sidebar-section">
+          <div class="section-label">Preferiti <span aria-hidden="true">+</span></div>
+          <a class="nav-item" href="./folderai-explorer.html" title="Documenti"><span data-icon="folder"></span><span class="nav-text">Documenti</span></a>
+          <a class="nav-item" href="./folderai-explorer.html" title="Apollo"><span data-icon="folder"></span><span class="nav-text">Apollo</span><span class="count">12</span></a>
+          <button class="nav-item" data-demo-message="Design system: collegamento dimostrativo." title="Design system"><span data-icon="folder"></span><span class="nav-text">Design system</span></button>
+          <button class="nav-item" data-demo-message="Personale: collegamento dimostrativo." title="Personale"><span data-icon="folder"></span><span class="nav-text">Personale</span></button>
+        </div>
+        <div class="sidebar-section">
+          <div class="section-label">Ricerche salvate</div>
+          <button class="nav-item is-active" data-demo-message="Questa è l'analisi dimostrativa attualmente aperta." title="Rinnovi Apollo"><span data-icon="search-folder"></span><span class="nav-text">Rinnovi Apollo</span></button>
+          <button class="nav-item" data-demo-message="Le ricerche salvate conservano query, filtri e ambito; non una copia statica dei risultati." title="Documenti da rivedere"><span data-icon="search-folder"></span><span class="nav-text">Da rivedere</span></button>
+        </div>
+        <div class="sidebar-section">
+          <div class="section-label">Tag</div>
+          <button class="nav-item" data-demo-message="Apollo: filtro per tag dimostrativo." title="Tag Apollo"><span class="nav-dot purple"></span><span class="nav-text">Apollo</span><span class="count">8</span></button>
+          <button class="nav-item" data-demo-message="Contratti: filtro per tag dimostrativo." title="Tag Contratti"><span class="nav-dot green"></span><span class="nav-text">Contratti</span><span class="count">4</span></button>
+        </div>
+        <div class="sidebar-spacer"></div>
+        <div class="storage"><div class="storage-title"><span data-icon="database"></span>Indice locale</div><div class="storage-bar"><span style="width:100%;background:#8aae9c"></span></div><span>1.248 file · aggiornato nella demo</span></div>
+        <button class="nav-item" data-action="preferences" title="Preferenze"><span data-icon="settings"></span><span class="nav-text">Preferenze</span><span class="count">⌘ ,</span></button>
+      </aside>
+
+      <main class="workspace ai-workspace" aria-label="Ricerca con fonti e assistente AI">
+        <div class="toolbar ai-toolbar">
+          <nav class="breadcrumbs" aria-label="Posizione"><span data-icon="search"></span><span class="parent">Ricerca</span><span data-icon="chevron-right"></span><strong>Archivio Apollo</strong></nav>
+          <div class="toolbar-spacer"></div>
+          <button class="local-badge" data-action="models"><span data-icon="shield"></span>Elaborazione locale</button>
+          <button class="icon-button" data-action="models" aria-label="Configurazione dimostrativa dei modelli" title="Modelli e connessioni"><span data-icon="sliders"></span></button>
+        </div>
+
+        <div class="research-main">
+          <div class="research-heading">
+            <div><div class="eyebrow">Il tuo archivio, con più contesto</div><h1>Ricerca intelligente</h1><p class="content-description">Trova i documenti. Collega le informazioni. Verifica le fonti.</p></div>
+            <button class="button" data-action="save-search"><span data-icon="bookmark"></span>Salva ricerca</button>
+          </div>
+
+          <form class="search-composer" id="ai-search-form">
+            <div class="search-query"><span data-icon="sparkles"></span><input id="ai-query" aria-label="Richiesta di ricerca" value="Confronta le condizioni di rinnovo e segnala le differenze." autocomplete="off"><button class="button primary" type="submit" id="run-search"><span class="search-label">Cerca</span><span data-icon="arrow-right"></span></button></div>
+            <div class="search-composer-footer">
+              <div class="mode-selector" role="group" aria-label="Modalità di ricerca">
+                <button type="button" class="mode-button is-active" data-mode="auto" aria-pressed="true"><span data-icon="wand"></span>Auto</button>
+                <button type="button" class="mode-button" data-mode="simple" aria-pressed="false">Semplice</button>
+                <button type="button" class="mode-button" data-mode="semantic" aria-pressed="false">Semantica</button>
+                <button type="button" class="mode-button" data-mode="agentic" aria-pressed="false"><span data-icon="sparkles"></span>Agentica</button>
+              </div>
+              <button type="button" class="model-button" data-action="models"><span data-icon="cpu"></span>Qwen3 8B · LM Studio<span data-icon="chevron-down"></span></button>
+            </div>
+          </form>
+
+          <div class="scope-row">
+            <span class="scope-label">Ambito</span>
+            <button class="scope-chip" data-demo-message="Ambito dimostrativo autorizzato: Apollo / Contratti."><span data-icon="folder"></span>Contratti</button>
+            <button class="scope-chip" data-demo-message="Ambito dimostrativo autorizzato: Apollo / Documentazione."><span data-icon="folder"></span>Documentazione</button>
+            <button class="scope-chip" data-demo-message="Ambito dimostrativo autorizzato: Apollo / Riunioni."><span data-icon="folder"></span>Riunioni</button>
+            <span class="scope-security"><span data-icon="lock"></span>Solo queste cartelle · sola lettura</span>
+          </div>
+
+          <div class="research-grid">
+            <section class="source-results" aria-label="Fonti della ricerca">
+              <div class="results-heading"><h2 id="results-heading">Fonti trovate <span style="margin-left:5px">4 documenti</span></h2><span id="route-label">Auto → Agentica</span></div>
+              <article class="source-card" id="source-1" tabindex="-1">
+                <div class="source-top"><span class="file-type-icon">PDF</span><div><h3 class="source-title">Contratto quadro 2025.pdf</h3><div class="source-path">Apollo / Contratti</div></div><span class="source-number">01</span></div>
+                <p>«Il contratto ha durata di dodici mesi e si <mark>rinnova tacitamente</mark> per un uguale periodo, salvo disdetta scritta con un preavviso di almeno <mark>60 giorni</mark>.»</p>
+                <div class="source-bottom"><span>Pagina 8 · Art. 12, Durata e rinnovo</span><button data-open-source="1">Apri fonte<span data-icon="arrow-up-right"></span></button></div>
+              </article>
+              <article class="source-card" id="source-2" tabindex="-1">
+                <div class="source-top"><span class="file-type-icon">PDF</span><div><h3 class="source-title">Accordo integrativo.pdf</h3><div class="source-path">Apollo / Contratti</div></div><span class="source-number">02</span></div>
+                <p>«Il rinnovo è subordinato alla <mark>conferma scritta delle parti</mark>, da comunicare almeno <mark>30 giorni</mark> prima della scadenza.»</p>
+                <div class="source-bottom"><span>Pagina 3 · Art. 4, Proroga</span><button data-open-source="2">Apri fonte<span data-icon="arrow-up-right"></span></button></div>
+              </article>
+              <article class="source-card" id="source-3" tabindex="-1">
+                <div class="source-top"><span class="file-type-icon md">MD</span><div><h3 class="source-title">Checklist rinnovo.md</h3><div class="source-path">Apollo / Documentazione</div></div><span class="source-number">03</span></div>
+                <p>«Prima del rinnovo: verificare l’approvazione del budget e ottenere una <mark>conferma scritta</mark>. Checklist interna, non allegata agli accordi.»</p>
+                <div class="source-bottom"><span>Righe 14–18 · Checklist interna</span><button data-open-source="3">Apri fonte<span data-icon="arrow-up-right"></span></button></div>
+              </article>
+              <article class="source-card" id="source-4" tabindex="-1">
+                <div class="source-top"><span class="file-type-icon txt">TXT</span><div><h3 class="source-title">Verbale 24 ottobre.txt</h3><div class="source-path">Apollo / Riunioni</div></div><span class="source-number">04</span></div>
+                <p>«Aperto: chiarire quale procedura di rinnovo si applica. Il team richiede una <mark>verifica dell’accordo integrativo</mark> prima di procedere.»</p>
+                <div class="source-bottom"><span>Righe 22–25 · Decisioni aperte</span><button data-open-source="4">Apri fonte<span data-icon="arrow-up-right"></span></button></div>
+              </article>
+              <div class="results-notice"><span data-icon="info"></span><span>Le citazioni aprono il passaggio, non solo il documento.</span></div>
+            </section>
+
+            <aside class="answer-panel" aria-label="Assistente e attività di ricerca">
+              <div class="answer-header"><div class="answer-identity"><span class="ai-mark" data-icon="sparkles"></span>Assistente</div><span class="readonly-pill"><span data-icon="lock"></span>Sola lettura</span></div>
+              <div id="agent-answer">
+                <h2>Due modalità di rinnovo.<br>Una differenza da verificare.</h2>
+                <p class="answer-text">Nei documenti consultati emergono <strong>due condizioni diverse</strong>: rinnovo tacito nel contratto quadro e conferma esplicita nell’accordo integrativo. <a class="citation" href="#source-1" aria-label="Fonte 1, contratto quadro">1</a> <a class="citation" href="#source-2" aria-label="Fonte 2, accordo integrativo">2</a></p>
+                <div class="comparison" aria-label="Confronto delle condizioni">
+                  <div class="comparison-row head"><span>Documento</span><span>Condizione</span></div>
+                  <div class="comparison-row"><strong>Contratto quadro <a class="citation" href="#source-1" aria-label="Apri fonte 1">1</a></strong><span>Tacito · disdetta 60 gg</span></div>
+                  <div class="comparison-row"><strong>Accordo integrativo <a class="citation" href="#source-2" aria-label="Apri fonte 2">2</a></strong><span>Conferma scritta · 30 gg</span></div>
+                </div>
+                <p class="answer-text">La checklist richiede una conferma scritta, ma è un documento interno. Anche il verbale segnala che la procedura applicabile è ancora da chiarire. <a class="citation" href="#source-3" aria-label="Apri fonte 3">3</a> <a class="citation" href="#source-4" aria-label="Apri fonte 4">4</a></p>
+                <div class="evidence-warning"><span data-icon="alert"></span><div><strong>Da verificare prima di procedere</strong><p>I passaggi recuperati non bastano a stabilire quale clausola prevalga. Controlla ambito e validità dell’accordo integrativo.</p></div></div>
+              </div>
+              <div id="non-agent-answer" class="empty-answer" hidden><span data-icon="search"></span><h2 id="non-agent-title">I risultati, senza una risposta generata.</h2><p id="non-agent-description">La ricerca semantica trova passaggi pertinenti. Non avvia un agente e non sintetizza i documenti.</p><button class="button soft" data-action="deepen"><span data-icon="sparkles"></span>Approfondisci con l’agente</button></div>
+              <details class="activity-summary" id="research-activity"><summary id="activity-summary">Ricerca completata · 4 fonti consultate</summary><ol class="activity-steps" id="activity-steps"><li><span data-icon="check-circle"></span>Ricerca nei contenuti autorizzati<small>3 cartelle</small></li><li><span data-icon="check-circle"></span>Lettura dei passaggi pertinenti<small>4 fonti</small></li><li><span data-icon="check-circle"></span>Confronto e risposta con citazioni<small>Completato</small></li></ol></details>
+              <div class="answer-actions"><button class="button" data-action="copy-answer"><span data-icon="copy"></span>Copia sintesi</button><button class="icon-button" data-demo-message="Le fonti fittizie sono tutte visibili nella colonna dei risultati." aria-label="Mostra tutte le fonti" title="Fonti consultate"><span data-icon="book"></span></button></div>
+              <p class="answer-footnote">Esempio dimostrativo, non una valutazione legale.<br>Nessuna ricerca reale e nessuna modifica ai file.</p>
+            </aside>
+          </div>
+        </div>
+      </main>
+    </div>
+    <footer class="statusbar"><span class="status-group"><span class="status-dot"></span><span id="ai-status">Demo locale · nessun dato inviato</span></span><span class="status-demo">CONCEPT 02 · RICERCA E AI</span><span class="status-group"><span data-icon="shield" class="icon-sm"></span>Nessuna connessione a un provider</span></footer>
+  </div>
+  <div class="demo-note"><span>Mockup interattivo · modelli, fonti e risultati esemplificativi · nessuna chiamata AI</span><a href="./folderai-explorer.html">Torna all’explorer classico →</a></div>
+</body>
+</html>

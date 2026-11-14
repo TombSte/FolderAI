@@ -1,0 +1,133 @@
+/* Concept 04: a macOS-inspired interpretation, not a replica of a specific OS release. */
+:root {
+  --background: #c5cdec;
+  --surface: #ffffff;
+  --sidebar: #eef1fa;
+  --soft: #f8faff;
+  --text: #2b3447;
+  --secondary: #58667e;
+  --muted: #8590a3;
+  --accent: #1676e9;
+  --accent-soft: #e7f0ff;
+  --accent-border: #ccddf8;
+  --line: #e5eaf380;
+  --border: #d9e0ed;
+}
+:root[data-theme="dark"] {
+  --surface: #20283a;
+  --sidebar: #1b253a;
+  --soft: #232c3e;
+  --text: #edf2fc;
+  --secondary: #b5c3d9;
+  --muted: #99a8c2;
+  --accent: #8ac0ff;
+  --accent-soft: #2c456b;
+  --accent-border: #425c86;
+  --line: #d7e2ff12;
+  --border: #7d93bc40;
+}
+body.macos-concept { background: #c2cceb; background-image: radial-gradient(ellipse at 12% 7%, #e6e9ff 0%, transparent 51%), radial-gradient(ellipse at 93% 95%, #ecbda9 0%, transparent 55%), radial-gradient(ellipse at 100% 7%, #b9a6dd 0%, transparent 56%), linear-gradient(145deg, #adc8eb, #c5c4ed 55%, #d1c4dd); background-attachment: fixed; min-height: 100dvh; }
+[data-theme="dark"] body.macos-concept { background: #17243e; background-image: radial-gradient(ellipse at 15% 0%, #34486a 0%, transparent 52%), radial-gradient(ellipse at 95% 95%, #60465a 0%, transparent 55%), radial-gradient(ellipse at 100% 7%, #3a315c 0%, transparent 56%), linear-gradient(145deg, #1a3659, #302d4d); }
+.macos-concept .desktop-menubar { height: 29px; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; font-size: 11px; word-spacing: 13px; color: #25344d; background: #ffffff36; border-bottom: 1px solid #ffffff20; -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.macos-concept .desktop-menubar strong { font-weight: 650; }
+.macos-concept .desktop-menubar > span:last-child { word-spacing: 4px; font-size: 10px; }
+.macos-concept .unified-window { width: calc(100% - 96px); margin-top: 27px; height: min(980px, calc(100dvh - 103px)); border-radius: 20px; border: 1px solid #ffffffa0; background: #f6f8ffad; box-shadow: 0 35px 80px #28385435, 0 7px 22px #26395412, inset 0 1px 0 #ffffffb0; -webkit-backdrop-filter: blur(38px) saturate(140%); backdrop-filter: blur(38px) saturate(140%); grid-template-rows: 53px minmax(0, 1fr) 28px; }
+.macos-concept .window-header { background: #f6f8ff66; border-bottom-color: #ffffff55; padding: 0 21px; }
+.macos-concept .traffic-lights { margin-right: 19px; gap: 8px; }
+.macos-concept .traffic-lights i { width: 12px; height: 12px; }
+.macos-concept .app-symbol { background: linear-gradient(145deg, #72c9ff, #2483ec 52%, #3668d1); box-shadow: inset 0 0 0 1px #ffffff50, 0 2px 4px #326bc62b; border-radius: 7px; }
+.macos-concept .window-location { font-size: 12px; color: #46546d; }
+.macos-concept .window-actions { gap: 6px; }
+.macos-concept .window-actions .icon-button { border-radius: 50%; color: #687793; }
+.macos-concept .window-actions .icon-button:hover { background: #ffffff80; }
+.macos-concept .unified-body { grid-template-columns: 207px minmax(0, 1fr); }
+.macos-concept .navigation { background: #f0f4ff38; border-right: 1px solid #d9e3f361; padding-top: 25px; }
+.macos-concept .workspace-identity { padding-bottom: 28px; }
+.macos-concept .user-avatar { background: linear-gradient(145deg, #f8e8d8, #e7c4b6); color: #947365; box-shadow: inset 0 0 0 1px #ffffff88; border-radius: 11px; }
+.macos-concept .nav-section h2 { text-transform: none; font-size: 10px; letter-spacing: .1px; color: #7b86a0; }
+.macos-concept .nav-row { border-radius: 8px; font-size: 11px; }
+.macos-concept .nav-row.active { color: #2869b8; background: #ffffff99; box-shadow: inset 0 0 0 1px #ffffffb0, 0 2px 4px #526d9c08; }
+.macos-concept .nav-row > svg.icon { color: #629cdd; }
+.macos-concept .nav-row:hover { background: #ffffff55; }
+.macos-concept .group-label { font-size: 9px; color: #8a96aa; }
+.macos-concept .nav-bottom .disk-meter { background: #a0b1d02e; }
+.macos-concept .nav-bottom .disk-meter > i { background: #9eafd2; }
+.macos-concept .unified-workspace { background: #ffffffb8; border-radius: 12px 0 0; }
+.macos-concept .workspace-toolbar { min-height: 78px; border-bottom-color: #dce3f064; background: #ffffff36; gap: 17px; }
+.macos-concept .path-controls > .icon-button { border-radius: 50%; background: #ffffff70; box-shadow: inset 0 0 0 1px #e2e8f480; width: 29px; height: 29px; }
+.macos-concept .unified-search { border-radius: 22px; background: #ffffffb0; border: 1px solid #ffffff; height: 42px; box-shadow: 0 2px 8px #6376990d, inset 0 0 0 1px #bfcde02e; padding-left: 14px; -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.macos-concept .unified-search:focus-within { border-color: #78b5ff; box-shadow: 0 0 0 3px #007aff10, 0 2px 8px #6376990d; }
+.macos-concept .mode-trigger { border-radius: 15px; background: #e8f1fd; color: #3777c6; padding: 5px 8px; box-shadow: inset 0 0 0 1px #d4e3f75c; }
+.macos-concept .filter-trigger { border-radius: 50%; }
+.macos-concept .submit-search { border-radius: 50%; background: linear-gradient(145deg, #449df8, #2379e0); box-shadow: inset 0 1px 0 #ffffff40, 0 2px 4px #2676d124; }
+.macos-concept .search-popover { border-radius: 16px; background: #f8faff; border-color: #ffffffd0; box-shadow: 0 20px 60px #2639572a, inset 0 0 0 1px #ffffffa0; -webkit-backdrop-filter: blur(35px) saturate(150%); backdrop-filter: blur(35px) saturate(150%); }
+.macos-concept .mode-popover > button { border-radius: 9px; }
+.macos-concept .mode-popover > button[aria-checked="true"] { background: #dfeaffb0; }
+.macos-concept .choice-icon { background: #ffffff9c; border-color: #d9e3f06b; border-radius: 8px; }
+.macos-concept .workspace-tabs { background: #f9fbff61; border-bottom-color: #dce3f064; }
+.macos-concept .workspace-tab { border-bottom-color: transparent; min-height: 31px; margin: 5px 0; border-radius: 8px; }
+.macos-concept .workspace-tab.active { background: #ffffffdf; color: #47719f; box-shadow: 0 1px 4px #5062800b, inset 0 0 0 1px #dce4f866; }
+.macos-concept .workspace-tabs .view-controls { border-radius: 8px; background: #edf1f7a3; padding: 2px; gap: 1px; }
+.macos-concept .view-controls .icon-button.active { background: #ffffffe6; color: #526783; box-shadow: 0 1px 3px #52678310; }
+.macos-concept .search-context { background: #f3f7ff75; border-bottom-color: #dce3f064; }
+.macos-concept .context-chip { background: #ffffffc7; border-color: #dce4f3; border-radius: 7px; }
+.macos-concept .explorer-content { padding-top: 28px; }
+.macos-concept h1 { font-weight: 650; letter-spacing: -.9px; }
+.macos-concept .result-count { border-radius: 7px; background: #eef3fa; border-color: #e3eaf4; }
+.macos-concept .result-row { border-bottom-color: #e2e8f18c; }
+.macos-concept .result-row.selected { background: #dfebfc9e; border-radius: 9px; border-bottom-color: transparent; box-shadow: inset 0 0 0 1px #c9def84a; }
+.macos-concept .result-row:hover:not(.selected) { background: #eef4fb7a; border-radius: 8px; }
+.macos-concept .result-file-icon { border-radius: 6px; background: linear-gradient(#fff7f3, #f8eae4); box-shadow: 0 2px 4px #6f493a07, inset 0 1px 0 #ffffffa0; }
+.macos-concept .result-file-icon.md, .macos-concept .result-file-icon.txt { background: linear-gradient(#f7faff, #e6ecfb); }
+.macos-concept .result-file-icon.folder { background: none; box-shadow: none; }
+.macos-concept mark { background: #dceaff; color: #4676af; }
+.macos-concept .exploration-hint { border-radius: 12px; border-color: #d5deeb; background: #f9fbff59; }
+.macos-concept .context-panel { background: #f5f8ff9e; border-left-color: #dce3f09c; }
+.macos-concept .context-panel-tabs { background: #ffffff3d; }
+.macos-concept .context-panel-tabs > button.active { background: #ffffffe0; color: #5379a4; box-shadow: 0 1px 3px #536f9610, inset 0 0 0 1px #dce6f666; border-radius: 7px; }
+.macos-concept .condition-card { background: #ffffffc2; border-color: #ffffff; box-shadow: 0 3px 14px #4d658a06, inset 0 0 0 1px #e8edf533; border-radius: 12px; }
+.macos-concept .condition-card > strong { color: #3f566f; }
+.macos-concept .attention-note { background: #fff7eaba; border: 1px solid #f4e7cd80; border-radius: 11px; }
+.macos-concept .follow-up { border-radius: 10px; background: #e8f1ffab; border-color: #d7e4f6; }
+.macos-concept .unified-status { background: #f2f5ff72; border-top-color: #ffffff60; }
+.macos-concept .concept-caption { width: calc(100% - 96px); color: #53627c; }
+.macos-concept .preview-sheet { background: #dfe6f187; border-radius: 14px; }
+.macos-concept .outlined-button { border-radius: 10px; background: #ffffffa1; }
+.macos-concept dialog { background: #f8fafff0; border-color: #ffffffd0; border-radius: 20px; -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); }
+.macos-concept .unified-body.sidebar-hidden { grid-template-columns: minmax(0, 1fr); }
+[data-theme="dark"] .macos-concept .desktop-menubar { background: #18233b66; color: #e0e9fb; border-bottom-color: #ffffff08; }
+[data-theme="dark"] .macos-concept .unified-window { background: #243149a3; border-color: #a9c0ff38; box-shadow: 0 35px 80px #070b2450, inset 0 1px 0 #c5d8ff15; }
+[data-theme="dark"] .macos-concept .window-header { background: #28354d40; border-color: #ffffff09; }
+[data-theme="dark"] .macos-concept .window-location, [data-theme="dark"] .macos-concept .window-actions .icon-button { color: #c0cee4; }
+[data-theme="dark"] .macos-concept .navigation { background: #23334b24; border-color: #ffffff08; }
+[data-theme="dark"] .macos-concept .nav-section h2, [data-theme="dark"] .macos-concept .group-label { color: #a1b0c8; }
+[data-theme="dark"] .macos-concept .nav-row.active { background: #c0d7ff15; color: #c6ddff; box-shadow: inset 0 0 0 1px #b0d5ff14; }
+[data-theme="dark"] .macos-concept .nav-row:hover { background: #c0d7ff0d; }
+[data-theme="dark"] .macos-concept .unified-workspace { background: #1d293bd9; }
+[data-theme="dark"] .macos-concept .workspace-toolbar, [data-theme="dark"] .macos-concept .workspace-tabs, [data-theme="dark"] .macos-concept .search-context { background: #24314764; border-color: #afc7ed10; }
+[data-theme="dark"] .macos-concept .unified-search { background: #c3d7ff0b; border-color: #c5d9ff26; box-shadow: inset 0 1px 0 #ffffff08; }
+[data-theme="dark"] .macos-concept .mode-trigger { background: #72a3ef20; color: #a8cbff; box-shadow: none; }
+[data-theme="dark"] .macos-concept .path-controls > .icon-button, [data-theme="dark"] .macos-concept .view-controls, [data-theme="dark"] .macos-concept .context-chip { background: #c3d7ff0b; border-color: #b0c9ef1a; box-shadow: none; }
+[data-theme="dark"] .macos-concept .workspace-tab.active, [data-theme="dark"] .macos-concept .view-controls .icon-button.active { background: #c3d7ff13; color: #c3d7f4; box-shadow: none; }
+[data-theme="dark"] .macos-concept .result-count { background: #c5d9ff0b; border-color: #c5d9ff10; }
+[data-theme="dark"] .macos-concept .result-row { border-color: #c5d9ff0b; }
+[data-theme="dark"] .macos-concept .result-row.selected { background: #7fb5ff1c; box-shadow: inset 0 0 0 1px #82b6ff15; }
+[data-theme="dark"] .macos-concept .result-row:hover:not(.selected), [data-theme="dark"] .macos-concept .exploration-hint { background: #c5d9ff05; border-color: #c5d9ff15; }
+[data-theme="dark"] .macos-concept mark { background: #315382; color: #d1e5ff; }
+[data-theme="dark"] .macos-concept .context-panel { background: #28384f78; border-color: #c5d9ff12; }
+[data-theme="dark"] .macos-concept .context-panel-tabs { background: #c5d9ff03; }
+[data-theme="dark"] .macos-concept .context-panel-tabs > button.active { background: #c5d9ff10; color: #b7d6ff; box-shadow: none; }
+[data-theme="dark"] .macos-concept .condition-card { background: #c5d9ff06; border-color: #c5d9ff12; box-shadow: none; }
+[data-theme="dark"] .macos-concept .condition-card > strong { color: #cfdef4; }
+[data-theme="dark"] .macos-concept .attention-note { background: #d6a04b14; border-color: #d6a04b18; }
+[data-theme="dark"] .macos-concept .follow-up { background: #75a8ff15; border-color: #75a8ff22; }
+[data-theme="dark"] .macos-concept .unified-status { background: #26354f66; border-color: #c5d9ff0c; }
+[data-theme="dark"] .macos-concept .concept-caption { color: #c4d2e8; }
+[data-theme="dark"] .macos-concept .search-popover, [data-theme="dark"] .macos-concept dialog { background: #2b3a52f2; border-color: #c5d9ff2a; box-shadow: 0 20px 60px #0003; }
+[data-theme="dark"] .macos-concept .mode-popover > button[aria-checked="true"] { background: #8cbcff20; }
+[data-theme="dark"] .macos-concept .choice-icon { background: #c5d9ff0c; border-color: #c5d9ff1a; }
+[data-theme="dark"] .macos-concept .outlined-button { background: #c5d9ff0b; }
+@media (max-width: 1200px) { .macos-concept .unified-body { grid-template-columns: 181px minmax(0, 1fr); } .macos-concept .workspace-toolbar { gap: 10px; } }
+@media (max-width: 980px) { .macos-concept .unified-window { width: calc(100% - 32px); margin-top: 16px; height: calc(100dvh - 86px); } .macos-concept .concept-caption { width: calc(100% - 32px); } .macos-concept .unified-body { grid-template-columns: 160px minmax(0, 1fr); } .macos-concept .workspace-toolbar { gap: 0; } .macos-concept .unified-body.sidebar-hidden { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 740px) { .macos-concept .desktop-menubar { display: none; } .macos-concept .unified-window { width: 100%; height: 100dvh; margin: 0; border-radius: 0; border-left: 0; border-right: 0; } .macos-concept .unified-body { grid-template-columns: 53px minmax(0, 1fr); } .macos-concept .unified-workspace { border-radius: 0; } .macos-concept .window-header { padding: 0 12px; } .macos-concept .traffic-lights { gap: 5px; margin-right: 5px; } .macos-concept .traffic-lights i { width: 9px; height: 9px; } .macos-concept .navigation { padding-top: 14px; } .macos-concept .nav-row { padding: 9px; } .macos-concept .mode-trigger { padding: 5px; } .macos-concept .workspace-tab { min-height: 28px; margin: 5px 0; } .macos-concept .context-panel { border-top: 1px solid var(--line); border-left: 0; } .macos-concept .unified-body.sidebar-hidden { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-transparency: reduce) { .macos-concept .unified-window, .macos-concept .window-header, .macos-concept .navigation, .macos-concept .unified-workspace, .macos-concept .workspace-toolbar, .macos-concept .workspace-tabs, .macos-concept .search-context, .macos-concept .context-panel, .macos-concept .search-popover, .macos-concept dialog { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface); } }
