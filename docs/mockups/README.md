@@ -1,18 +1,54 @@
-# FolderAI — Mockup HTML
+# FolderAI — Mockup UI
 
-Cinque render per discutere l'interfaccia prima dell'implementazione Tauri/React. I primi due esplorano viste separate; i nuovi concept integrano la scelta della ricerca direttamente nell'explorer, senza un toggle globale Explorer/AI.
+## Studio corrente: UI unificata «Workspace sobrio»
 
-| Vista | File | Contenuto |
+[Anteprima statica dell'explorer](unified-preview.png).
+
+Aprire [folderai-unified.html](folderai-unified.html) direttamente nel browser, anche offline. In alternativa, con il server descritto sotto: http://127.0.0.1:8000/folderai-unified.html.
+
+**Mockup e direzione visiva validati dall'utente.** È il riferimento corrente per lo stile della UI unificata macOS/Windows, senza due skin native separate; non costituisce una specifica completa né una validazione delle funzionalità ancora assenti nella demo. Decisioni UI e limiti dell'approvazione sono raccolti in [`analysis/05-ui-design.md`](../../analysis/05-ui-design.md). I prototipi precedenti restano disponibili come materiale storico.
+
+- Superfici opache, accento blu, bordi sottili, icone lineari e temi chiaro/scuro. Font locali di sistema; Inter non è ancora distribuita con il mockup.
+- All'avvio: file e cartelle, sidebar senza profilo, ricerca ridotta alla lente, pannello destro chiuso e pulsanti delle operazioni nascosti.
+- I tre controlli **esterni alla finestra** mostrano Explorer, un esempio con Assistente e l'anteprima. Non sono comandi previsti per l'app.
+- Provare elenco/griglia, selezione e frecce da tastiera, sidebar nascondibile, sezioni richiudibili e albero Apollo espandibile.
+- La lente o Cmd/Ctrl+K aprono la ricerca. Semplice filtra nomi, tag e note fittizi; Semantica usa lo stesso filtro dopo Invio, senza un vero indice. Agentica e Auto aprono l'input conversazionale esteso.
+- Il pannello destro alterna **Dettagli / Assistente**. È ridimensionabile con il separatore, anche tramite frecce da tastiera; nelle finestre strette viene sovrapposto all'area file per non tagliare l'input.
+- Input AI **solo testuale**, multilinea: Invio va a capo, Cmd/Ctrl+Invio o il pulsante inviano. Nessun allegato o input per immagini in questa fase.
+- Vicino all'input: **Globale = cartelle abilitate**, oppure **Cartella e sottocartelle**, con cartella dimostrativa modificabile. Navigare nell'explorer non cambia questo ambito.
+- «Con assistente» mostra il confronto Apollo fisso, con due citazioni apribili in Dettagli e ritorno alla conversazione. Le richieste libere ricevono soltanto un avviso dimostrativo, non risposte inventate. Il suggerimento nella conversazione carica il testo senza inviarlo.
+- Le due schede conservano conversazione, bozza, ambito, ricerca e vista nella memoria della pagina. Ricaricando si perde tutto. L'utente ha successivamente escluso la cronologia persistente dal prodotto (AI-DEC-009); il relativo pulsante illustrativo non va interpretato come requisito ancora valido.
+- In **Impostazioni** si provano tema, densità compatta e visibilità dei comandi illustrativi Copia/Elimina. Le note sono modificabili solo in memoria; tag, percorsi e anteprime sono illustrativi.
+
+Nessuna registrazione, risorsa remota, accesso al filesystem, chiamata AI o operazione reale sui file. La demo non implementa tutte le decisioni discusse: ad esempio doppio pannello, vista a colonne, filtri avanzati, gestione completa delle schede e centro attività restano fuori da questo studio di stile. Non attesta accessibilità o compatibilità multipiattaforma già validate.
+
+Asset dedicati: `unified.css`, `unified.js`. I file dei prototipi precedenti non sono stati modificati da questo studio.
+
+Validazione dello studio: sintassi JavaScript verificata con `node --check docs/mockups/unified.js`; smoke test su Chromium/Brave headless di temi, ricerca, viste, pannelli, citazioni, ambito, input multilinea, stato per scheda, tastiera e impostazioni. Controllati caricamento senza richieste HTTP, assenza di errori JavaScript e layout a larghezze 720/950/1100/1440 px. Non equivale a una validazione su tutti i browser o sistemi operativi.
+
+## Prototipi precedenti: explorer-first per piattaforma
+
+Due render HTML della stessa esperienza, con interpretazioni grafiche macOS e Windows 11 / WinUI 3.
+
+| Variante | File | Stile |
 | --- | --- | --- |
-| Explorer classico | [folderai-explorer.html](folderai-explorer.html) | Sidebar, schede, viste dettagli/griglia/colonne, selezione e pannello anteprima con metadati, tag e nota |
-| Ricerca e AI | [folderai-ai.html](folderai-ai.html) | Semplice/Semantica/Agentica/Auto, ambito esplicito, risultati con passaggi, confronto con citazioni e attività osservabili |
-| Ricerca integrata | [folderai-integrated.html](folderai-integrated.html) | Stile originale, menu delle modalità dentro la barra, file e risposta contestuale nello stesso ambiente |
-| Interpretazione macOS | [folderai-macos.html](folderai-macos.html) | Stessa interazione integrata, con chrome traslucido, accenti blu, superfici morbide e desktop illustrativo |
-| Windows 11 / WinUI 3 | [folderai-winui.html](folderai-winui.html) | Ricerca integrata, superfici stile Mica, controlli Fluent, command bar, caption Windows e taskbar illustrativa |
+| macOS | [folderai-macos.html](folderai-macos.html) | Chrome traslucido, accenti blu e superfici morbide |
+| Windows 11 / WinUI 3 | [folderai-winui.html](folderai-winui.html) | Superfici stile Mica, controlli Fluent e caption Windows |
+
+## Impostazione comune
+
+- **Schede nella prima riga della finestra**, accanto ai controlli nativi illustrativi, come nei terminali. Nessuna barra di schede a metà dell'interfaccia.
+- All'apertura si vedono **file e cartelle**, non una ricerca già avviata.
+- **Ricerca inizialmente ridotta alla sola lente**. Al clic si espande orizzontalmente nella toolbar esistente, senza aggiungere una riga o ridurre l'altezza dell'elenco.
+- Scelta Semplice / Semantica / Agentica / Auto dentro la barra espansa. Semplice è il valore iniziale dimostrativo, non una nuova decisione sui requisiti del prodotto.
+- Filtri e ambito compaiono soltanto durante la ricerca. Non esiste un toggle globale Explorer/AI.
+- **Pannello laterale chiuso di default**: l'area dei file occupa tutta la larghezza disponibile dopo la sidebar.
+- Il pannello di anteprima si apre su richiesta. La risposta agentica appare soltanto dopo aver inviato esplicitamente una richiesta.
+- Chiusura della ricerca e cancellazione di un'attività dimostrativa pendente ripristinano l'explorer, senza un'apertura tardiva del pannello AI.
 
 ## Apertura
 
-Aprire direttamente uno dei file HTML nel browser. CSS e JavaScript sono locali: non servono build, installazioni, font remoti o connessioni di rete.
+Aprire direttamente il file HTML nel browser. Non servono build, installazioni, font remoti o connessioni di rete.
 
 In alternativa, dalla radice del repository:
 
@@ -20,75 +56,59 @@ In alternativa, dalla radice del repository:
 python3 -m http.server 8000 --bind 127.0.0.1 --directory docs/mockups
 ```
 
-Poi aprire:
-
-- http://127.0.0.1:8000/folderai-explorer.html
-- http://127.0.0.1:8000/folderai-ai.html
-- http://127.0.0.1:8000/folderai-integrated.html
 - http://127.0.0.1:8000/folderai-macos.html
 - http://127.0.0.1:8000/folderai-winui.html
 
-Nei primi due render, il selettore in alto a destra permette di confrontare le viste originali. Nei nuovi render **non c'è un toggle Explorer/AI**: la modalità si sceglie nella barra di ricerca. I collegamenti di confronto tra direzioni visive sono fuori dalla finestra dell'app, nella didascalia. Il pulsante luna/sole cambia il tema; il tema scelto viene ricordato dal browser quando lo storage locale è disponibile. Le viste sono pensate soprattutto per desktop, con adattamenti per finestre più piccole.
+I collegamenti di confronto sono nella didascalia esterna alla finestra dell'app.
 
-## Interazioni dimostrative
+## Interazioni da provare
 
 ### Explorer
 
-- Selezionare le righe per aggiornare informazioni, tag e nota del pannello laterale. Frecce su/giù e Invio funzionano sull'elenco.
-- Filtrare per nome con la ricerca; `Cmd/Ctrl + K` porta il focus al campo.
-- Usare tag e ricerca salvata PDF come filtri sui dati fittizi.
-- Passare tra dettagli, griglia e una rappresentazione illustrativa della vista a colonne.
-- Attivare/disattivare il secondo pannello dimostrativo.
-- Mostrare un file nascosto, invertire l'ordinamento o aggiungere una cartella solo alla memoria della pagina.
-- Aprire Preferenze e Centro attività dimostrativi.
+- All'avvio: nove elementi fittizi, colonne nome/tipo/dimensione/modifica, nessuna ricerca o AI attiva.
+- Passare tra elenco e griglia; mostrare/nascondere la sidebar.
+- Selezionare un file senza aprire automaticamente altri pannelli. L'icona **Anteprima e informazioni** apre o chiude il pannello laterale.
+- In un pannello già aperto, la selezione aggiorna documento illustrativo, nota e tag. Frecce su/giù navigano l'elenco.
+- Le schede sono in alto: Apollo torna alla cartella; Documenti, «+» e i comandi di creazione/gestione mostrano spiegazioni illustrative, senza operazioni reali.
+- Il pulsante luna/sole cambia tema; la scelta è ricordata dal browser se lo storage locale è disponibile.
 
-### AI
+### Ricerca a scomparsa
 
-- Cambiare modalità: semplice e semantica mostrano risultati senza sintesi; agentica mostra la risposta documentata.
-- In Auto, poche regole locali illustrano il routing: richieste di confronto portano ad Agentica, estensioni esplicite a Semplice, le altre a Semantica. **Non è un classificatore AI né la logica definitiva del prodotto.**
-- Il pulsante Cerca simula un'attesa, ma **non esegue una ricerca**: fonti e risposta rimangono esempi fissi anche cambiando la domanda.
-- Le citazioni evidenziano la fonte; «Apri fonte» mostra il passaggio fittizio in una finestra di dialogo.
-- Il pulsante del modello mostra un esempio di ruoli specializzati. Nomi e assegnazioni sono illustrativi, non scelte tecniche approvate.
-- «Salva ricerca» aggiunge un collegamento alla pagina, senza persistenza dopo il ricaricamento.
-- «Copia sintesi» scrive soltanto il testo dimostrativo negli appunti, su azione esplicita; se il browser nega l'accesso, viene segnalato.
+1. Cliccare la lente oppure premere **Cmd/Ctrl + K**: il campo si espande e riceve il focus.
+2. Provare `.pdf` in modalità Semplice: il filtro usa nomi e metadati fittizi. Il pannello AI non si apre.
+3. Il mini menu permette di scegliere le quattro modalità. Frecce, Home/End ed Esc navigano il menu; **Alt + Freccia giù** lo apre dal campo.
+4. Semantica mostra risultati illustrativi senza sintesi. Auto usa poche regole locali, non un modello.
+5. Per l'esempio agentico, scegliere **Agentica** e scrivere «Confronta le condizioni di rinnovo», poi premere Invio. Solo dopo l'attesa simulata compare il confronto con fonti.
+6. In alternativa, **Rinnovi Apollo** nella sidebar carica e avvia esplicitamente lo stesso esempio in Auto.
+7. Le citazioni selezionano la fonte e ne mostrano l'anteprima nel pannello contestuale; «Risposta» torna al confronto.
+8. I filtri includono/escludono formati. Il confronto fisso non viene mostrato se mancano le fonti necessarie.
+9. **Esc** chiude prima un eventuale menu, poi la ricerca. La «×» o un secondo clic sulla lente chiudono direttamente la ricerca, svuotando la query. Un campo vuoto si richiude anche quando perde il focus.
+10. «Salva ricerca» conserva query, modalità e filtri soltanto nella memoria della pagina; si azzera ricaricandola.
 
-### Ricerca integrata: originale, macOS e Windows
+La risposta AI è un esempio fisso, non cambia realmente per una domanda arbitraria. Il pannello aperto automaticamente dall'agente si richiude uscendo dalla ricerca; un'anteprima aperta esplicitamente dall'utente può invece rimanere visibile.
 
-- Tutti e tre partono da una ricerca in Apollo, con file e passaggi al centro e risposta nel pannello contestuale.
-- Il pulsante **Auto** nella barra apre un mini menu con Auto, Semplice, Semantica e Agentica, descrizioni e selezione corrente.
-- Semplice usa un filtro testuale sui nomi, passaggi e metadati fittizi; Semantica mostra i quattro risultati illustrativi senza generare una sintesi; Agentica mostra il confronto fisso con fonti. Auto usa poche regole locali, non un modello.
-- La scelta del tipo di ricerca non cambia pagina, sidebar o schede.
-- Cancellare la ricerca, premere Esc dal campo oppure scegliere «Torna alla cartella» ripristina l'elenco di nove elementi nello stesso explorer.
-- Il pulsante filtri permette di includere/escludere i formati della demo. Il confronto fisso non viene mostrato se mancano le fonti necessarie.
-- Selezionare un risultato o una citazione apre «File selezionato» nel medesimo pannello; «Risposta» torna al confronto. Nelle modalità senza generazione il pannello resta dedicato al file.
-- Sono disponibili vista elenco/griglia, visibilità di sidebar/pannello, tema e salvataggio di query/modalità/filtri nella sola memoria della pagina.
-- `Cmd/Ctrl + K` seleziona il campo. Il menu modalità supporta frecce, Home/End e Esc; `Alt + Freccia giù` lo apre dal campo.
-- «Cerca» simula soltanto un'attesa. La ricerca semantica e la risposta non cambiano realmente in base a una domanda arbitraria.
-- Il render macOS è **un'interpretazione ispirata al linguaggio macOS/glass**, non una riproduzione ufficiale o verificata di macOS 27. Mantiene le superfici di lettura relativamente opache e prevede un fallback CSS per la preferenza di riduzione delle trasparenze.
-- Le versioni precedenti sono conservate: il nuovo stile non sostituisce quello originale. Tema dei concept integrati e tema dei primi due render sono ricordati separatamente dal browser.
+## Caratterizzazione delle piattaforme
 
-### Variante Windows 11 / WinUI 3
+### macOS
 
-- Interpretazione HTML del linguaggio WinUI 3 / Fluent: superfici stile Mica, accenti blu, angoli da 4/8 px, indicatore verticale della navigazione e tab contestuali sottolineati.
-- Header con controlli finestra a destra, schede, command bar e barra di ricerca integrata; nessun selettore globale Explorer/AI.
-- Font locale `Segoe UI Variable Text` / `Segoe UI` dove installato, con fallback di sistema. Nessun font viene scaricato; su macOS/Linux la resa tipografica può differire.
-- Tema chiaro/scuro e le stesse interazioni di ricerca, citazioni, filtri, griglia, pannello e salvataggio dimostrativo degli altri concept integrati.
-- Il pulsante Massimizza/Ripristina ridimensiona soltanto il mockup nella pagina. Riduci a icona, Chiudi e i comandi del filesystem mostrano messaggi illustrativi: non controllano finestre native, file o appunti.
-- Taskbar, icone, meteo, disco e orologio sono fittizi. «Cerca» nella taskbar porta il focus al campo dell'app; l'icona FolderAI permette di tornarvi. Non viene aperto il menu Start reale.
-- Adattamento alle finestre strette e CSS per riduzione delle trasparenze e colori forzati; non sostituisce verifiche di accessibilità su Windows reale.
-- È **un mockup HTML ispirato a WinUI 3**, non un'app WinUI/XAML o un'implementazione nativa di Mica. Non cambia lo stack Tauri/React/Rust scelto per il prodotto.
-- I quattro render precedenti sono conservati senza modificarne grafica o comportamento.
+Interpretazione ispirata a macOS/glass, non replica ufficiale di macOS 27. Le trasparenze riguardano principalmente il chrome; i menu mantengono una superficie leggibile. È previsto un fallback CSS per la riduzione delle trasparenze.
 
-## Limiti e relazione con l'analisi
+### Windows 11 / WinUI 3
 
-- Nessun accesso al filesystem, nessuna chiamata a modelli/provider, nessun caricamento di documenti o dipendenze esterne.
-- File, capacità del disco, conteggi, date, fonti, modelli e risultati sono fittizi.
-- Le anteprime sono composizioni illustrative, non rendering di PDF o documenti reali.
-- Non sono implementati spostamenti, eliminazioni, estrazione ZIP, autenticazione, indicizzazione, note modificabili o sincronizzazione delle preferenze tra finestre.
-- Alcuni controlli mostrano soltanto una spiegazione del comportamento previsto. Il layout a colonne e il secondo pannello sono esempi visivi, non navigatori completi.
-- I testi su elaborazione locale e privacy descrivono lo scenario rappresentato: nessun engine AI è realmente connesso.
-- I riferimenti macOS sono una scelta illustrativa, non un vincolo di piattaforma.
-- Questi file non sostituiscono React/TypeScript/SCSS previsti per il prodotto e non attestano conformità o accessibilità già validate in Tauri.
-- Le soluzioni visive sono **proposte da discutere**, non nuovi requisiti automaticamente approvati. Il perimetro resta in [../../analysis/04-analysis-summary.md](../../analysis/04-analysis-summary.md).
+Interpretazione HTML del linguaggio WinUI/Fluent, non controlli WinUI/XAML nativi o Mica di sistema. Il font usa Segoe UI Variable / Segoe UI dove installato, con fallback locale.
 
-File condivisi dei primi due render: `mockups.css` e `mockups.js`. Concept integrati: `integrated.css` e `integrated.js`; macOS aggiunge `macos.css`, Windows aggiunge `winui.css` e `winui.js`.
+- Schede accanto all'icona dell'app e ai controlli finestra; toolbar compatta sotto, senza command bar aggiuntiva.
+- Massimizza/Ripristina ridimensiona soltanto il mockup nella pagina. Riduci a icona e Chiudi non agiscono sulle finestre reali.
+- Taskbar, disco, meteo e orologio sono illustrativi. «Cerca» nella taskbar espande la ricerca di FolderAI; l'icona dell'app riporta il focus alla scheda, senza attivare una ricerca.
+- CSS per colori forzati e riduzione delle trasparenze, da verificare anche in un ambiente Windows reale.
+
+## Limiti
+
+- Nessun accesso al filesystem, chiamata a provider/modelli o caricamento di risorse esterne.
+- Documenti, anteprime, date, capacità e risultati sono fittizi.
+- Nessuna copia, eliminazione, estrazione, autenticazione o modifica reale di note/file.
+- Non è un'implementazione Tauri/React e non attesta conformità di accessibilità già verificata.
+- Le proposte visive non sostituiscono il [perimetro analizzato](../../analysis/04-analysis-summary.md).
+- Non vengono ripristinate le precedenti pagine HTML rimosse dal repository.
+
+Asset condivisi: `integrated.css`, `integrated.js`, `explorer-first.css`. macOS aggiunge `macos.css`; Windows aggiunge `winui.css` e `winui.js`.

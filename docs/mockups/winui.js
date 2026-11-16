@@ -2,7 +2,6 @@
 (() => {
   "use strict";
   const maximize = document.querySelector("#winui-maximize");
-  const query = document.querySelector("#unified-query");
 
   maximize.addEventListener("click", () => {
     const maximized = document.body.classList.toggle("winui-maximized");
@@ -16,8 +15,9 @@
   });
 
   document.querySelector("#taskbar-search").addEventListener("click", () => {
-    query.focus();
-    query.select();
+    document.dispatchEvent(new Event("folderai:focus-search"));
   });
-  document.querySelector("#taskbar-folderai").addEventListener("click", () => query.focus());
+  document.querySelector("#taskbar-folderai").addEventListener("click", () => {
+    document.querySelector(".workspace-tab.active").focus();
+  });
 })();

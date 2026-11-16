@@ -7,15 +7,16 @@
   <title>FolderAI — Interpretazione macOS · Concept 04</title>
   <link rel="stylesheet" href="./integrated.css">
   <link rel="stylesheet" href="./macos.css">
+  <link rel="stylesheet" href="./explorer-first.css">
   <script src="./integrated.js" defer></script>
 </head>
-<body class="macos-concept">
+<body class="macos-concept explorer-first">
   <div class="desktop-menubar" aria-hidden="true"><span>◆ <strong>FolderAI</strong> File Modifica Vista Vai Finestra Aiuto</span><span>◉ ⌁ ▰ &nbsp; Gio 14 nov &nbsp; 10:42</span></div>
   <div class="unified-window">
     <header class="window-header">
       <div class="window-identity"><div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="app-symbol" data-icon="layers"></span><strong>FolderAI</strong></div>
-      <span class="window-location"><span data-icon="folder"></span>Apollo <span class="location-detail">— Il mio spazio</span></span>
-      <div class="window-actions"><button class="icon-button" data-action="sidebar" aria-label="Nascondi barra laterale" aria-pressed="true" title="Barra laterale"><span data-icon="sidebar"></span></button><button class="icon-button" data-action="theme" aria-label="Cambia tema" title="Chiaro / scuro"><span data-icon="moon"></span></button><button class="icon-button" data-message="Nessuna operazione in corso. Questo è un mockup locale." aria-label="Centro attività" title="Centro attività"><span data-icon="activity"></span></button></div>
+      <div class="workspace-tabs" role="group" aria-label="Schede della finestra"><button class="workspace-tab active" data-action="browse" aria-current="page"><span data-icon="folder"></span>Apollo<span class="tab-x" aria-hidden="true">×</span></button><button class="workspace-tab" data-message="La scheda Documenti è illustrativa."><span data-icon="folder"></span>Documenti<span class="tab-x" aria-hidden="true">×</span></button><button class="icon-button new-tab" data-message="Una nuova scheda partirebbe dalla cartella iniziale." aria-label="Nuova scheda"><span data-icon="plus"></span></button></div>
+      <div class="window-actions"><button class="icon-button" data-action="theme" aria-label="Cambia tema" title="Chiaro / scuro"><span data-icon="moon"></span></button></div>
     </header>
     <div class="unified-body">
       <aside class="navigation" aria-label="Barra laterale">
@@ -29,11 +30,16 @@
 
       <main class="unified-workspace">
         <div class="workspace-toolbar">
-          <div class="path-controls"><button class="icon-button" data-action="browse" title="Torna alla cartella" aria-label="Torna alla cartella"><span data-icon="arrow-left"></span></button><nav class="path" aria-label="Percorso"><span>Progetti</span><span data-icon="chevron-right"></span><button data-action="browse">Apollo</button></nav></div>
+          <div class="path-controls"><button class="icon-button" data-action="sidebar" aria-label="Nascondi barra laterale" aria-pressed="true" title="Barra laterale"><span data-icon="sidebar"></span></button><button class="icon-button back-button" data-action="browse" title="Torna alla cartella" aria-label="Torna alla cartella"><span data-icon="arrow-left"></span></button><nav class="path" aria-label="Percorso"><span>Progetti</span><span data-icon="chevron-right"></span><button data-action="browse">Apollo</button></nav></div>
+          <div class="toolbar-spacer"></div>
+          <button class="toolbar-new" data-message="Creazione illustrativa: nessun file reale viene creato."><span data-icon="plus"></span>Nuovo</button>
+          <div class="view-controls" role="group" aria-label="Vista e anteprima"><button class="icon-button active" data-layout="list" aria-pressed="true" aria-label="Vista elenco" title="Elenco"><span data-icon="list"></span></button><button class="icon-button" data-layout="grid" aria-pressed="false" aria-label="Vista griglia" title="Griglia"><span data-icon="grid"></span></button><button class="icon-button" data-action="inspector" aria-pressed="false" aria-label="Mostra anteprima" title="Anteprima e informazioni"><span data-icon="panel-right"></span></button></div>
+          <button class="icon-button toolbar-more" data-message="Altri comandi dimostrativi: copia, sposta, rinomina e centro attività." aria-label="Altri comandi" title="Altri comandi"><span data-icon="more"></span></button>
           <form class="unified-search" id="unified-search" role="search">
-            <span class="search-symbol" data-icon="search"></span>
-            <input id="unified-query" type="text" value="Confronta le condizioni di rinnovo" placeholder="Cerca file, contenuti o fai una domanda…" aria-label="Cerca in Apollo" autocomplete="off">
-            <button class="clear-query" type="button" data-action="clear" aria-label="Esci dalla ricerca" title="Esci dalla ricerca"><span data-icon="x-circle"></span></button>
+            <button id="search-toggle" class="search-toggle" type="button" data-action="toggle-search" aria-label="Apri ricerca" aria-expanded="false" aria-controls="search-fields" title="Cerca · ⌘ K"><span data-icon="search"></span></button>
+            <div class="search-fields" id="search-fields" hidden>
+            <input id="unified-query" type="text" value="" placeholder="Cerca file, contenuti o fai una domanda…" aria-label="Cerca in Apollo" autocomplete="off">
+            <button class="clear-query" type="button" data-action="clear" aria-label="Chiudi ricerca e torna ai file" title="Chiudi ricerca · Esc"><span data-icon="x-circle"></span></button>
             <div class="search-divider"></div>
             <button class="mode-trigger" id="mode-trigger" type="button" aria-haspopup="menu" aria-controls="search-mode-menu" aria-expanded="false" title="Scegli il tipo di ricerca"><span id="mode-icon" data-icon="wand"></span><span id="mode-name">Auto</span><span class="tiny-icon" data-icon="chevron-down"></span></button>
             <button class="filter-trigger" id="filter-trigger" type="button" aria-label="Filtri di ricerca" aria-haspopup="dialog" aria-expanded="false" aria-controls="search-filter-menu" title="Filtri"><span data-icon="sliders"></span></button>
@@ -47,15 +53,15 @@
               <div class="popover-note" role="presentation"><span data-icon="shield"></span>La modalità non cambia i tuoi permessi.</div>
             </div>
             <div class="search-popover filter-popover" id="search-filter-menu" role="dialog" aria-label="Filtri rapidi" hidden><div class="popover-label">Formati nei risultati</div><label><input type="checkbox" data-format="pdf" checked>Documenti PDF</label><label><input type="checkbox" data-format="md" checked>Markdown</label><label><input type="checkbox" data-format="txt" checked>Testo</label><label><input type="checkbox" data-format="png" checked>Immagini</label><label><input type="checkbox" data-format="folder" checked>Cartelle</label><div class="popover-note">Filtri sui soli documenti fittizi della demo.</div></div>
+            </div>
           </form>
         </div>
-        <div class="workspace-tabs"><div class="workspace-tab active"><span data-icon="folder"></span>Apollo <span class="tab-x" aria-hidden="true">×</span></div><button class="workspace-tab" data-message="La scheda Documenti è illustrativa."><span data-icon="folder"></span>Documenti</button><button class="icon-button" data-message="Nell'app completa una nuova scheda si apre nella cartella iniziale." aria-label="Nuova scheda"><span data-icon="plus"></span></button><div class="view-controls"><button class="icon-button active" data-layout="list" aria-pressed="true" aria-label="Vista elenco" title="Elenco"><span data-icon="list"></span></button><button class="icon-button" data-layout="grid" aria-pressed="false" aria-label="Vista griglia" title="Griglia"><span data-icon="grid"></span></button><button class="icon-button" data-action="inspector" aria-pressed="true" aria-label="Mostra o nascondi pannello laterale" title="Pannello laterale"><span data-icon="panel-right"></span></button></div></div>
-        <div class="search-context" id="search-context"><div class="context-left"><span class="context-label">Cerca in</span><button class="context-chip" data-message="Ambito della demo: la cartella Apollo e le sue sottocartelle."><span data-icon="folder"></span>Apollo<span data-icon="chevron-down"></span></button><span class="context-separator"></span><span class="scope-subfolders">Sottocartelle incluse</span></div><span class="route-indicator" id="route-indicator"><span data-icon="wand"></span><span id="route-description">Auto ha scelto Agentica</span></span></div>
+        <div class="search-context" id="search-context" hidden><div class="context-left"><span class="context-label">Cerca in</span><button class="context-chip" data-message="Ambito della demo: la cartella Apollo e le sue sottocartelle."><span data-icon="folder"></span>Apollo<span data-icon="chevron-down"></span></button><span class="context-separator"></span><span class="scope-subfolders">Sottocartelle incluse</span></div><span class="route-indicator" id="route-indicator"><span data-icon="wand"></span><span id="route-description">Auto ha scelto Agentica</span></span></div>
 
-        <div class="workspace-content" id="workspace-content">
+        <div class="workspace-content panel-hidden" id="workspace-content">
           <section class="explorer-content" aria-label="File e risultati di ricerca">
-            <div class="results-title"><div><div class="section-kicker" id="section-kicker">La ricerca resta nel tuo spazio</div><h1 id="main-heading">Risultati in Apollo<span class="result-count" id="result-count">4</span></h1><p id="results-description">Documenti pertinenti, passaggi verificabili e un confronto a lato.</p></div><button class="icon-button" data-action="save-search" aria-label="Salva ricerca" title="Salva ricerca"><span data-icon="bookmark"></span></button></div>
-            <div class="file-column-labels" aria-hidden="true"><span>Nome <span data-icon="arrow-up"></span></span><span>Dimensione</span><span>Modificato</span></div>
+            <div class="results-title"><div><div class="section-kicker" id="section-kicker" hidden>Cartella locale</div><h1 id="main-heading">Apollo<span class="result-count" id="result-count">9</span></h1><p id="results-description" hidden>File e cartelle nello spazio principale.</p></div><button class="icon-button" data-action="save-search" aria-label="Salva ricerca" title="Salva ricerca" hidden><span data-icon="bookmark"></span></button></div>
+            <div class="file-column-labels" aria-hidden="true"><span>Nome <span data-icon="arrow-up"></span></span><span class="file-type-heading">Tipo</span><span>Dimensione</span><span>Modificato</span></div>
             <div class="unified-file-list" id="unified-file-list" role="list" aria-label="Elementi dimostrativi"></div>
             <p class="empty-list" id="empty-list" hidden>Nessun elemento dimostrativo corrisponde ai filtri.</p>
             <div class="exploration-hint" id="exploration-hint"><span data-icon="folder-open"></span><div><strong>Sempre dentro il tuo explorer.</strong><p>Apri una fonte, cambia vista o cancella la ricerca per tornare ai file.</p></div><button data-action="browse">Torna alla cartella<span data-icon="arrow-right"></span></button></div>
@@ -86,7 +92,7 @@
     </div>
     <footer class="unified-status"><span><i class="mini-dot"></i><span id="status-text">Demo locale · nessun dato inviato</span></span><span class="status-middle">Un explorer. Tutti i modi di cercare.</span><span><kbd>⌘ K</kbd><span>per cercare</span></span></footer>
   </div>
-  <footer class="concept-caption"><span>CONCEPT 04 · Interpretazione macOS / glass · non una replica ufficiale di macOS 27</span><a href="./folderai-integrated.html">Vedi lo stile originale, con ricerca integrata →</a></footer>
+  <footer class="concept-caption"><span>macOS · Explorer-first · ricerca a scomparsa · dati fittizi</span><a href="./folderai-winui.html">Confronta la versione Windows →</a></footer>
   <noscript>Questo mockup interattivo richiede JavaScript locale. Nessuna dipendenza viene caricata dalla rete.</noscript>
 </body>
 </html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FolderAI — Workspace sobrio</title>
+  <link rel="stylesheet" href="./unified.css">
+  <script src="./unified.js" defer></script>
+</head>
+<body>
+  <header class="concept-bar">
+    <a class="concept-brand" href="./folderai-unified.html"><span class="brand-mark" data-icon="layers"></span>FolderAI <span class="concept-label">Studio di stile / 01</span></a>
+    <div class="concept-options" role="group" aria-label="Scenari dimostrativi">
+      <button data-action="scene-explorer" aria-pressed="true">Explorer</button>
+      <button data-action="scene-assistant" aria-pressed="false">Con assistente</button>
+      <button data-action="scene-details" aria-pressed="false">Con anteprima</button>
+    </div>
+    <button class="button subtle" data-action="theme" title="Cambia tema" aria-label="Passa al tema scuro"><span data-icon="moon"></span><span>Tema</span></button>
+  </header>
+
+  <div class="app-window" id="app-window">
+    <header class="titlebar">
+      <span class="app-logo" data-icon="layers" aria-label="FolderAI"></span>
+      <div class="workspace-tabs" role="group" aria-label="Schede">
+        <button class="workspace-tab active" data-tab="apollo" aria-current="page"><span data-icon="folder"></span>Apollo<span class="tab-close" aria-hidden="true">×</span></button>
+        <button class="workspace-tab" data-tab="documents"><span data-icon="folder"></span>Documenti<span class="tab-close" aria-hidden="true">×</span></button>
+        <button class="icon-button" data-action="new-tab" title="Nuova scheda · illustrativo" aria-label="Nuova scheda"><span data-icon="plus"></span></button>
+      </div>
+      <span class="window-label">Workspace locale</span>
+      <div class="window-controls" aria-label="Controlli finestra illustrativi"><button data-action="window-demo" aria-label="Riduci a icona · illustrativo">−</button><button data-action="window-demo" aria-label="Massimizza · illustrativo">□</button><button data-action="window-demo" aria-label="Chiudi · illustrativo">×</button></div>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar" id="sidebar" aria-label="Navigazione">
+        <div class="sidebar-scroll">
+          <details class="nav-section" open><summary>Posizioni</summary>
+            <button class="nav-item" data-action="demo-location"><span data-icon="home"></span>Home</button>
+            <button class="nav-item" data-tab="documents"><span data-icon="document"></span>Documenti</button>
+            <button class="nav-item" data-action="demo-location"><span data-icon="download"></span>Download</button>
+            <button class="nav-item" data-action="demo-location"><span data-icon="image"></span>Immagini</button>
+          </details>
+          <details class="nav-section" open><summary>Preferiti</summary>
+            <div class="nav-group">Lavoro</div>
+            <div class="nav-tree-row"><button class="tree-toggle" data-action="tree" aria-label="Espandi sottocartelle di Apollo" aria-expanded="false" aria-controls="apollo-tree"><span data-icon="chevron-right"></span></button><button class="nav-item active" data-tab="apollo" aria-current="location"><span data-icon="folder"></span>Apollo</button></div>
+            <div class="tree-children" id="apollo-tree" hidden><button class="nav-item" data-action="demo-location"><span data-icon="folder"></span>Contratti</button><button class="nav-item" data-action="demo-location"><span data-icon="folder"></span>Design</button></div>
+            <button class="nav-item" data-action="demo-location"><span data-icon="folder"></span>Design system</button>
+            <button class="nav-item" data-action="demo-location"><span data-icon="folder"></span>Personale</button>
+          </details>
+          <details class="nav-section" open><summary>Tag</summary>
+            <button class="nav-item" data-tag="Da verificare"><i class="tag-dot amber"></i>Da verificare</button>
+            <button class="nav-item" data-tag="Contratti"><i class="tag-dot blue"></i>Contratti</button>
+            <button class="nav-item" data-tag="Approvato"><i class="tag-dot green"></i>Approvato</button>
+          </details>
+          <details class="nav-section" open><summary>Ricerche salvate</summary>
+            <button class="nav-item" data-action="saved-search"><span data-icon="search-folder"></span>Rinnovi Apollo</button>
+          </details>
+        </div>
+        <div class="sidebar-bottom"><button class="nav-item" data-action="settings"><span data-icon="settings"></span>Impostazioni</button></div>
+      </aside>
+
+      <main class="workspace">
+        <div class="toolbar">
+          <button class="icon-button" data-action="sidebar" aria-label="Nascondi sidebar" aria-expanded="true" aria-controls="sidebar" title="Sidebar"><span data-icon="sidebar"></span></button>
+          <div class="nav-buttons"><button class="icon-button" data-action="nav-demo" title="Indietro · illustrativo" aria-label="Indietro"><span data-icon="arrow-left"></span></button><button class="icon-button" disabled title="Avanti" aria-label="Avanti"><span data-icon="arrow-right"></span></button><button class="icon-button" data-action="nav-demo" title="Cartella superiore · illustrativo" aria-label="Cartella superiore"><span data-icon="arrow-up"></span></button></div>
+          <nav class="breadcrumb" aria-label="Percorso"><span data-icon="home"></span><span data-icon="chevron-right"></span><button data-action="nav-demo">Progetti</button><span data-icon="chevron-right"></span><strong id="breadcrumb-current">Apollo</strong></nav>
+          <div class="file-commands" id="file-commands" hidden><button class="icon-button" data-action="file-demo" aria-label="Copia" title="Copia · illustrativo"><span data-icon="copy"></span></button><button class="icon-button" data-action="file-demo" aria-label="Elimina" title="Elimina · illustrativo"><span data-icon="trash"></span></button></div>
+          <form class="search-box" id="search-form" role="search">
+            <button class="icon-button" type="button" data-action="search" aria-label="Apri ricerca" aria-expanded="false" aria-controls="search-fields" title="Cerca · Cmd/Ctrl K"><span data-icon="search"></span></button>
+            <div id="search-fields" class="search-fields" hidden><input id="search-input" aria-label="Ricerca nei file dimostrativi" placeholder="Cerca nei file…" autocomplete="off"><select id="search-mode" aria-label="Modalità di ricerca"><option value="simple">Semplice</option><option value="semantic">Semantica</option><option value="agentic">Agentica</option><option value="auto">Auto</option></select><button class="icon-button" type="button" data-action="close-search" title="Chiudi ricerca" aria-label="Chiudi ricerca"><span data-icon="x"></span></button></div>
+          </form>
+          <div class="toolbar-divider"></div>
+          <div class="view-buttons" role="group" aria-label="Vista"><button class="icon-button active" data-view="list" aria-pressed="true" title="Dettagli" aria-label="Vista dettagli"><span data-icon="list"></span></button><button class="icon-button" data-view="grid" aria-pressed="false" title="Griglia" aria-label="Vista griglia"><span data-icon="grid"></span></button></div>
+          <button class="icon-button" data-action="inspector" title="Anteprima e informazioni" aria-label="Apri dettagli" aria-expanded="false" aria-controls="right-panel"><span data-icon="panel-right"></span></button>
+          <button class="icon-button" data-action="assistant" title="Assistente" aria-label="Apri assistente" aria-expanded="false" aria-controls="right-panel"><span data-icon="sparkles"></span></button>
+        </div>
+
+        <div class="workspace-content" id="workspace-content">
+          <section class="file-area" aria-label="File e cartelle">
+            <div class="folder-heading"><div><div class="eyebrow" id="folder-eyebrow">Progetti</div><h1 id="folder-title">Apollo</h1></div><button class="button subtle" data-action="sort-demo" title="Ordinamento dimostrativo"><span data-icon="sort"></span>Nome<span data-icon="chevron-down"></span></button></div>
+            <div class="search-summary" id="search-summary" hidden></div>
+            <div class="file-columns" aria-hidden="true"><span>Nome <span data-icon="arrow-up"></span></span><span>Tipo</span><span>Dimensione</span><span>Modificato</span></div>
+            <div class="file-list" id="file-list" role="listbox" aria-label="File dimostrativi"></div>
+            <p class="empty-state" id="empty-state" hidden>Nessun elemento corrisponde alla ricerca.</p>
+            <div class="file-area-note"><span data-icon="shield"></span>File sul dispositivo. Nessuna registrazione.</div>
+          </section>
+
+          <div class="panel-resizer" id="panel-resizer" role="separator" aria-orientation="vertical" aria-label="Larghezza pannello destro" aria-valuemin="340" aria-valuemax="560" aria-valuenow="390" tabindex="0" hidden></div>
+          <aside class="right-panel" id="right-panel" aria-label="Assistente e dettagli" hidden>
+            <header class="panel-header"><div class="panel-switch" role="group" aria-label="Contenuto del pannello"><button data-panel="details" aria-pressed="false">Dettagli</button><button data-panel="assistant" aria-pressed="true" class="active">Assistente</button></div><button class="icon-button" data-action="close-panel" aria-label="Chiudi pannello" title="Chiudi pannello"><span data-icon="x"></span></button></header>
+            <section class="assistant-panel" id="assistant-panel" aria-label="Conversazione">
+              <div class="assistant-toolbar"><span><i class="status-dot"></i>Modello locale <span class="demo-badge">Demo</span></span><button class="icon-button" data-action="history" title="Cronologia della demo" aria-label="Cronologia"><span data-icon="history"></span></button><button class="icon-button" data-action="new-chat" title="Nuova conversazione" aria-label="Nuova conversazione"><span data-icon="plus"></span></button></div>
+              <div class="conversation" id="conversation" role="log" aria-label="Messaggi della conversazione" aria-live="polite">
+                <div class="chat-welcome" id="chat-welcome"><span class="welcome-icon" data-icon="sparkles"></span><h2>Cosa vuoi trovare?</h2><p>Descrivi cosa cerchi, aggiungi contesto e indica quali aspetti confrontare.</p><button class="example-prompt" data-action="example"><span data-icon="document"></span><span>Confronta le condizioni di rinnovo dei contratti Apollo</span><span data-icon="arrow-up-right"></span></button></div>
+              </div>
+              <div class="composer-area">
+                <form id="chat-form" class="composer">
+                  <label for="chat-input" class="sr-only">Descrivi la ricerca agentica</label><textarea id="chat-input" placeholder="Descrivi la ricerca, anche in dettaglio…" rows="4"></textarea>
+                  <div class="composer-scope"><span data-icon="folder"></span><label for="chat-scope" class="sr-only">Ambito della ricerca</label><select id="chat-scope"><option value="folder">Cartella e sottocartelle</option><option value="global">Globale · cartelle abilitate</option></select><button type="button" id="scope-folder" class="scope-folder" data-action="scope-folder" title="Cambia cartella di ricerca">Apollo<span data-icon="chevron-down"></span></button></div>
+                  <div class="composer-bottom"><label class="composer-mode"><span data-icon="sparkles"></span><select id="chat-mode" aria-label="Modalità conversazionale"><option value="agentic">Agentica</option><option value="auto">Auto</option></select></label><button class="send-button" type="submit" aria-label="Invia richiesta" title="Invia · Cmd/Ctrl Invio"><span data-icon="arrow-up"></span></button></div>
+                </form>
+                <p class="composer-caption">Solo testo · nessun invio remoto · risposta dimostrativa</p>
+              </div>
+            </section>
+            <section class="details-panel" id="details-panel" aria-label="Dettagli del file selezionato" hidden>
+              <button class="back-to-chat" data-action="back-to-chat" hidden><span data-icon="arrow-left"></span>Torna alla conversazione</button>
+              <div class="document-preview"><div class="paper"><span class="paper-brand">APOLLO / DOCUMENTI</span><div class="paper-line"></div><h2 id="paper-title">Contratto quadro</h2><span class="paper-subtitle">Condizioni generali di fornitura</span><div class="paper-lines"><i></i><i></i><i></i><i></i></div><mark>Il contratto si rinnova tacitamente per dodici mesi, salvo disdetta scritta con un preavviso di almeno 60 giorni.</mark><div class="paper-lines"><i></i><i></i><i></i></div><small>Articolo 12 · Estratto fittizio</small></div></div>
+              <div class="file-info"><h2 id="detail-name">Contratto quadro 2025.pdf</h2><p class="muted" id="detail-path">Progetti / Apollo</p><p class="preview-disclaimer">Anteprima illustrativa, non il contenuto di un file reale.</p>
+                <details open><summary>Proprietà</summary><dl><dt>Tipo</dt><dd id="detail-type">Documento PDF</dd><dt>Dimensione</dt><dd id="detail-size">2,4 MB</dd><dt>Modificato</dt><dd>14 nov 2026</dd></dl></details>
+                <details open><summary>Tag</summary><div class="detail-tags" id="detail-tags"></div></details>
+                <details open><summary>Nota <span class="small-label">Markdown</span></summary><label for="file-note" class="sr-only">Nota dimostrativa</label><textarea id="file-note" rows="3" placeholder="Aggiungi una nota…"></textarea><small class="muted">Modifiche solo nella memoria di questa pagina.</small></details>
+                <button class="button outlined" data-action="open-demo"><span data-icon="external"></span>Apri nell’app esterna</button>
+              </div>
+            </section>
+          </aside>
+        </div>
+        <footer class="statusbar"><span id="file-count">12 elementi</span><span id="selection-status"></span><span class="status-spacer"></span><span class="local-status"><span data-icon="shield"></span>Locale</span><button data-action="activities" title="Centro attività dimostrativo"><span data-icon="activity"></span>Attività<span class="activity-dot" hidden></span></button></footer>
+      </main>
+    </div>
+  </div>
+  <footer class="concept-footer"><span><strong>Workspace sobrio.</strong> Un’unica identità visiva, su macOS e Windows.</span><span>Mockup interattivo · dati fittizi · nessun filesystem o modello collegato</span></footer>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <dialog id="settings-dialog" aria-labelledby="settings-title"><header class="dialog-header"><h2 id="settings-title">Impostazioni della demo</h2><button class="icon-button" data-action="close-settings" aria-label="Chiudi impostazioni"><span data-icon="x"></span></button></header><p class="muted">Controlli per valutare lo stile. Le preferenze valgono solo in questa pagina.</p><label class="setting-row"><span><strong>Tema scuro</strong><small>Stessa identità, superfici e contrasti adattati.</small></span><input type="checkbox" id="setting-dark"></label><label class="setting-row"><span><strong>Densità compatta</strong><small>Più elementi visibili nell’elenco.</small></span><input type="checkbox" id="setting-compact"></label><label class="setting-row"><span><strong>Pulsanti operazioni sui file</strong><small>Mostra Copia ed Elimina come esempi illustrativi.</small></span><input type="checkbox" id="setting-commands"></label><p class="dialog-note">Font sans-serif di sistema: Inter non è ancora inclusa. Nessuna risorsa viene scaricata.</p></dialog>
+  <dialog id="scope-dialog" aria-labelledby="scope-title"><header class="dialog-header"><h2 id="scope-title">Cartella di ricerca</h2><button class="icon-button" data-action="close-scope" aria-label="Chiudi scelta cartella"><span data-icon="x"></span></button></header><p class="muted">Posizioni fittizie abilitate nella demo.</p><button class="scope-choice" data-scope-folder="Apollo"><span data-icon="folder"></span>Progetti / Apollo</button><button class="scope-choice" data-scope-folder="Contratti"><span data-icon="folder"></span>Documenti / Contratti</button></dialog>
+  <noscript>Abilita JavaScript per le interazioni del mockup. Nessuna connessione di rete necessaria.</noscript>
+</body>
+</html>

@@ -1,4 +1,4 @@
-/* Concepts 03/04: isolated, dependency-free UI simulation. No filesystem or network access. */
+/* Explorer-first macOS/Windows mockups. No filesystem, network or model access. */
 (() => {
   "use strict";
   const paths = {
@@ -69,7 +69,12 @@
     semantic: { name: "Semantica", icon: "orbit" },
     agentic: { name: "Agentica", icon: "sparkles" }
   };
-  const state = { mode: "auto", selected: "contract", panel: "answer", busy: false };
+  const state = {
+    mode: "simple", selected: null, panel: "preview", busy: false,
+    searchOpen: false, inspectorOpen: false, agentRequested: false,
+    agentPanelVisible: false, revision: 0, timer: null
+  };
+  const typeNames = { folder: "Cartella", pdf: "Documento PDF", md: "Markdown", txt: "File di testo", png: "Immagine PNG" };
   const saved = new Map();
   let visibleEntries = [];
   let toastTimer;
@@ -120,6 +125,36 @@
     $("#search-mode-menu").hidden = false;
     $("#mode-trigger").setAttribute("aria-expanded", "true");
     $(`[data-search-mode="${state.mode}"]`).focus();
+  }
+  function syncSearchVisibility() {
+    $("#unified-search").classList.toggle("is-expanded", state.searchOpen);
+    $(".workspace-toolbar").classList.toggle("search-expanded", state.searchOpen);
+    $("#search-fields").hidden = !state.searchOpen;
+    $("#search-toggle").setAttribute("aria-expanded", String(state.searchOpen));
+    $("#search-toggle").setAttribute("aria-label", state.searchOpen ? "Chiudi ricerca e torna ai file" : "Apri ricerca");
+  }
+  function openSearch(selectAll = false) {
+    state.searchOpen = true;
+    syncSearchVisibility();
+    $("#unified-query").focus();
+    if (selectAll) $("#unified-query").select();
+  }
+  function resetSearchActivity() {
+    state.revision += 1;
+    clearTimeout(state.timer);
+    state.timer = null;
+    state.busy = false;
+    state.agentRequested = false;
+    state.agentPanelVisible = false;
+    $("#unified-search").setAttribute("aria-busy", "false");
+    $(".submit-search").disabled = false;
+    $("#status-text").textContent = "Demo locale · nessun dato inviato";
+  }
+  function hasAgentAnswer() {
+    return state.agentRequested && Boolean($("#unified-query").value.trim()) && actualMode() === "agentic";
+  }
+  function panelIsVisible() {
+    return state.inspectorOpen || (hasAgentAnswer() && state.agentPanelVisible);
   }
   function actualMode() {
     if (state.mode !== "auto") return state.mode;
@@ -174,8 +209,16 @@
     $('[data-action="open-source"]').disabled = !entry;
   }
   function renderPanel() {
-    const agentic = Boolean($("#unified-query").value.trim()) && actualMode() === "agentic";
+    const agentic = hasAgentAnswer();
+    const visible = panelIsVisible();
     if (!agentic) state.panel = "preview";
+    $("#context-panel").hidden = !visible;
+    $("#workspace-content").classList.toggle("panel-hidden", !visible);
+    const toggle = $('[data-action="inspector"]');
+    toggle.setAttribute("aria-pressed", String(visible));
+    toggle.setAttribute("aria-label", visible ? "Nascondi pannello laterale" : "Mostra anteprima");
+    $(".privacy-strip").hidden = !$("#unified-query").value.trim();
+    $(".panel-menu").hidden = !$("#unified-query").value.trim();
     $("#answer-tab").hidden = !agentic;
     $$('[data-panel]').forEach(button => {
       const active = button.dataset.panel === state.panel;
@@ -193,8 +236,10 @@
   }
   function render() {
     const searching = Boolean($("#unified-query").value.trim());
+    document.body.classList.toggle("is-searching", searching);
+    syncSearchVisibility();
     visibleEntries = getEntries();
-    if (!visibleEntries.some(entry => entry.id === state.selected)) state.selected = visibleEntries[0]?.id || null;
+    if (state.selected && !visibleEntries.some(entry => entry.id === state.selected)) state.selected = searching ? visibleEntries[0]?.id || null : null;
     const list = $("#unified-file-list");
     list.replaceChildren();
     visibleEntries.forEach(entry => {
@@ -204,7 +249,7 @@
       row.className = "result-row" + (entry.id === state.selected ? " selected" : "");
       row.dataset.entryId = entry.id;
       row.setAttribute("aria-pressed", String(entry.id === state.selected));
-      row.innerHTML = '<span class="result-file-icon"></span><span class="result-row-main"><span class="result-file-name"></span><span class="result-path"></span></span><span class="result-row-size"></span><span class="result-row-date"></span>';
+      row.innerHTML = '<span class="result-file-icon"></span><span class="result-row-main"><span class="result-file-name"></span><span class="result-path"></span></span><span class="result-row-type"></span><span class="result-row-size"></span><span class="result-row-date"></span>';
       const fileIcon = row.querySelector(".result-file-icon");
       fileIcon.classList.add(entry.kind);
       if (entry.kind === "folder") fileIcon.innerHTML = icon("folder");
@@ -212,6 +257,7 @@
       row.querySelector(".result-file-name").textContent = entry.name;
       row.querySelector(".result-path").textContent = searching ? [entry.path, entry.page].filter(Boolean).join(" · ") : entry.kind === "folder" ? "Cartella locale" : entry.path;
       if (searching && entry.passage) row.querySelector(".result-row-main").append(passageNode(entry));
+      row.querySelector(".result-row-type").textContent = typeNames[entry.kind];
       row.querySelector(".result-row-size").textContent = entry.size;
       row.querySelector(".result-row-date").textContent = entry.date;
       if (searching && entry.source) {
@@ -224,7 +270,10 @@
       list.append(wrapper);
     });
     $("#search-context").hidden = !searching;
-    $(".clear-query").hidden = !searching;
+    $(".clear-query").hidden = !state.searchOpen;
+    $("#section-kicker").hidden = !searching;
+    $("#results-description").hidden = !searching;
+    $('[data-action="save-search"]').hidden = !searching;
     $("#section-kicker").textContent = searching ? "La ricerca resta nel tuo spazio" : "Cartella locale";
     $("#main-heading").replaceChildren(document.createTextNode(searching ? "Risultati in Apollo" : "Apollo"));
     const badge = document.createElement("span");
@@ -233,7 +282,7 @@
     badge.textContent = visibleEntries.length;
     $("#main-heading").append(badge);
     const route = actualMode();
-    $("#results-description").textContent = !searching ? "File, cartelle e contesto. Senza cambiare ambiente." : route === "agentic" ? "Documenti pertinenti, passaggi verificabili e un confronto a lato." : route === "semantic" ? "Risultati per significato. Nessuna risposta generata." : "Corrispondenze testuali nei dati della demo. Nessun LLM.";
+    $("#results-description").textContent = !searching ? "File, cartelle e contesto. Senza cambiare ambiente." : route === "agentic" ? hasAgentAnswer() ? "Confronto dimostrativo con fonti, nel pannello a lato." : "Premi Invio per avviare il confronto dimostrativo con fonti." : route === "semantic" ? "Risultati per significato, simulati. Nessuna risposta generata." : "Corrispondenze testuali nei dati della demo. Nessun LLM.";
     $("#route-description").textContent = state.mode === "auto" ? `Auto ha scelto ${modes[route].name}` : `${modes[route].name} · ${route === "simple" ? "senza LLM" : route === "semantic" ? "senza sintesi" : "con fonti"}`;
     $("#mode-name").textContent = modes[state.mode].name;
     $("#mode-icon").innerHTML = icon(modes[state.mode].icon);
@@ -254,17 +303,46 @@
     });
     renderPanel();
   }
-  function browse() {
+  function browse(focusToggle = false) {
     closePopovers();
+    resetSearchActivity();
     $("#unified-query").value = "";
+    state.searchOpen = false;
     state.panel = "preview";
     render();
+    if (focusToggle) $("#search-toggle").focus();
   }
   function setMode(mode) {
+    resetSearchActivity();
     state.mode = mode;
-    if (actualMode() === "agentic") state.panel = "answer";
     render();
   }
+  function runSearch() {
+    closePopovers();
+    if (!$("#unified-query").value.trim()) { browse(true); return; }
+    if (state.busy) return;
+    resetSearchActivity();
+    openSearch();
+    state.busy = true;
+    const revision = state.revision;
+    $("#unified-search").setAttribute("aria-busy", "true");
+    $(".submit-search").disabled = true;
+    $("#status-text").textContent = "Ricerca simulata…";
+    state.timer = setTimeout(() => {
+      if (revision !== state.revision) return;
+      state.timer = null;
+      state.busy = false;
+      state.agentRequested = actualMode() === "agentic";
+      state.agentPanelVisible = state.agentRequested;
+      if (state.agentRequested) state.panel = "answer";
+      $("#unified-search").setAttribute("aria-busy", "false");
+      $(".submit-search").disabled = false;
+      $("#status-text").textContent = "Demo locale · nessun dato inviato";
+      render();
+      notify("Ricerca simulata: fonti e risposta sono fittizie. Nessun modello o file reale viene consultato.");
+    }, 550);
+  }
+  document.addEventListener("folderai:focus-search", () => openSearch(true));
 
   $("#mode-trigger").addEventListener("click", () => {
     if ($("#search-mode-menu").hidden) openModeMenu();
@@ -290,27 +368,22 @@
   });
   $$('[data-format]').forEach(input => input.addEventListener("change", render));
   $("#unified-query").addEventListener("input", () => {
-    if (actualMode() === "agentic" && $("#unified-query").value.trim()) state.panel = "answer";
+    resetSearchActivity();
     render();
   });
   $("#unified-search").addEventListener("submit", event => {
     event.preventDefault();
-    closePopovers();
-    if (!$("#unified-query").value.trim()) { browse(); return; }
-    if (state.busy) return;
-    state.busy = true;
-    $("#unified-search").setAttribute("aria-busy", "true");
-    $(".submit-search").disabled = true;
-    $("#status-text").textContent = "Ricerca simulata…";
+    runSearch();
+  });
+  $("#unified-search").addEventListener("focusout", event => {
+    if ($("#unified-search").contains(event.relatedTarget)) return;
     setTimeout(() => {
-      state.busy = false;
-      $("#unified-search").setAttribute("aria-busy", "false");
-      $(".submit-search").disabled = false;
-      $("#status-text").textContent = "Demo locale · nessun dato inviato";
-      if (actualMode() === "agentic") state.panel = "answer";
-      render();
-      notify("Ricerca simulata: fonti e risposta sono fittizie. Nessun modello o file reale viene consultato.");
-    }, 550);
+      if (state.searchOpen && !$("#unified-query").value.trim() && !$("#unified-search").contains(document.activeElement) && !dialog.open) {
+        state.searchOpen = false;
+        closePopovers();
+        syncSearchVisibility();
+      }
+    }, 0);
   });
   $("#unified-file-list").addEventListener("keydown", event => {
     if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
@@ -337,8 +410,7 @@
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       closePopovers();
-      $("#unified-query").focus();
-      $("#unified-query").select();
+      openSearch(true);
     }
     if (event.key === "ArrowDown" && (event.target === $("#mode-trigger") || (event.altKey && event.target === $("#unified-query")))) {
       event.preventDefault();
@@ -347,16 +419,24 @@
     if (event.key === "Escape") {
       if (!$("#search-mode-menu").hidden) { event.preventDefault(); closePopovers(true); }
       else if (!$("#search-filter-menu").hidden) { event.preventDefault(); closePopovers(); $("#filter-trigger").focus(); }
-      else if (event.target === $("#unified-query")) { event.preventDefault(); browse(); }
+      else if (state.searchOpen) { event.preventDefault(); browse(true); }
     }
   });
 
   document.addEventListener("click", event => {
-    if (!event.target.closest(".unified-search")) closePopovers();
+    if (!event.target.closest(".unified-search")) {
+      closePopovers();
+      if (state.searchOpen && !$("#unified-query").value.trim() && !event.target.closest("#taskbar-search")) {
+        state.searchOpen = false;
+        syncSearchVisibility();
+      }
+    }
     const choice = event.target.closest("[data-search-mode]");
     if (choice) { setMode(choice.dataset.searchMode); closePopovers(true); return; }
     const source = event.target.closest("[data-source]");
     if (source) {
+      if (hasAgentAnswer()) state.agentPanelVisible = true;
+      else state.inspectorOpen = true;
       selectFile(source.dataset.source);
       const row = $(`[data-entry-id="${source.dataset.source}"]`);
       row?.classList.add("source-flash");
@@ -384,7 +464,9 @@
       const search = saved.get(savedButton.dataset.savedId);
       $("#unified-query").value = search.query;
       $$('[data-format]').forEach(input => { input.checked = search.formats.includes(input.dataset.format); });
+      openSearch();
       setMode(search.mode);
+      runSearch();
       return;
     }
     const message = event.target.closest("[data-message]");
@@ -400,18 +482,29 @@
         break;
       }
       case "inspector": {
-        const hidden = $("#workspace-content").classList.toggle("panel-hidden");
-        button.setAttribute("aria-pressed", String(!hidden));
+        if (panelIsVisible()) {
+          state.inspectorOpen = false;
+          state.agentPanelVisible = false;
+        } else {
+          state.inspectorOpen = true;
+          if (!state.selected) state.selected = visibleEntries.find(entry => entry.kind !== "folder")?.id || visibleEntries[0]?.id || null;
+        }
+        render();
         break;
       }
-      case "clear": case "browse": browse(); break;
+      case "toggle-search": if (state.searchOpen) browse(true); else openSearch(); break;
+      case "clear": browse(true); break;
+      case "browse": browse(); break;
       case "example-search":
         $("#unified-query").value = "Confronta le condizioni di rinnovo";
         $$('[data-format]').forEach(input => { input.checked = true; });
+        openSearch();
         setMode("auto");
+        runSearch();
         break;
       case "tag":
         $("#unified-query").value = button.dataset.tag;
+        openSearch();
         setMode("simple");
         notify("Filtro dimostrativo nei nomi, nei passaggi e nei metadati fittizi.");
         break;
