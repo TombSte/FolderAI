@@ -149,8 +149,6 @@ I dettagli puntuali sono conservati nel documento 2 e nel documento AI. I punti 
 
 La raccolta iniziale delle decisioni del file explorer è conclusa. Prima dei requisiti, su richiesta dell'utente, è stata approfondita anche la UI: le decisioni sono raccolte in `05-ui-design.md`. Il mockup unificato «Workspace sobrio» (`docs/mockups/folderai-unified.html`) e la relativa direzione visiva sono stati validati dall'utente; ciò non equivale a validazione delle funzionalità non implementate nella demo.
 
-Su richiesta esplicita dell'utente è stata anticipata la sola specifica dell'engine di embedding in `requirements/embedding.md`, collegata ad AI-DEC-005 e AI-ATT-002. Il passaggio successivo resta tradurre il resto del perimetro confermato in requisiti numerati e verificabili in `requirements/`, collegandoli alle decisioni FE-DEC, all'analisi UI e ai punti AI-ATT quando pertinenti.
+Il perimetro confermato è formalizzato nella [specifica del primo rilascio](../requirements/README.md). I requisiti numerati riportano criteri di accettazione e riferimenti alle decisioni di analisi. La [specifica dell'engine di embedding](../requirements/embedding.md) conserva gli identificativi EMB-001–005 collegati ad AI-DEC-005 e AI-ATT-002.
 
-Per ogni requisito: descrizione, ambito di rilascio, fonte della decisione e criterio di accettazione. Dove manca una decisione o una soglia, indicare esplicitamente il punto aperto invece di inventare un valore. Le capacità AI con perimetro ancora non definito vanno mantenute distinte.
-
-Il primo rilascio è un obiettivo funzionale, non l'impegno a sviluppare tutto insieme. Ordine di implementazione e architettura saranno definiti successivamente.
+Il [registro delle decisioni](../requirements/open-decisions.md) identifica le scelte di progettazione e le soglie ancora da definire, con il lavoro che ne dipende. La specifica include una sequenza proposta per avviare l'implementazione.
