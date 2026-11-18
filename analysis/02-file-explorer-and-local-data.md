@@ -18,7 +18,7 @@
 - Preferenze per cartella confermate: vista, ordinamento, raggruppamento e colonne visibili.
 - Avvio configurabile nella sezione Preferenze: aprire la cartella iniziale oppure ripristinare l'ambiente di navigazione precedente (FE-DEC-015). Il valore predefinito è aprire la cartella iniziale (FE-DEC-016): Home dell'utente, personalizzabile nelle Preferenze; se la cartella scelta non è accessibile, apertura della Home con avviso senza cancellare la preferenza (FE-DEC-017).
 - Operazioni manuali di base e gestione sicura confermate, come dettagliato nella sezione 7. La rinomina in blocco è rimandata a una fase successiva (FE-DEC-014).
-- Apertura dei file: l'utente richiede di poter cambiare l'applicazione predefinita in modo intuitivo e immediato. La scelta tra preferenze interne a FolderAI e associazioni di sistema è esplicitamente rinviata dall'utente a un'analisi futura; nessun ambito è stato approvato. Vedere sezione 8.
+- Apertura dei file: l'utente richiede di poter cambiare l'applicazione predefinita in modo intuitivo e immediato. La preferenza vale solo per le aperture effettuate da FolderAI. Vedere sezione 8.
 
 ## 2. Esperienza di esplorazione: aspetti da definire
 
@@ -89,7 +89,7 @@ Il database dell'applicazione e l'indice restano scrivibili per il loro funziona
 - Pannello laterale: anteprima e informazioni condividono un pannello opzionale a sezioni. Confermata anteprima dei contenuti in sola lettura nel primo rilascio, con note e tag modificabili come metadati (FE-DEC-049); definire interazione e comportamento nel doppio pannello.
 - Preferenze per cartella: persistenza e conservazione durante rinomina/spostamento confermate (FE-DEC-043); valori iniziali in FE-DEC-052–054. Definire ripristino e riconciliazione delle modifiche esterne.
 - Operazioni manuali: base confermata nella sezione 7; approfondire casi limite e recuperabilità. Rinomina in blocco esclusa dal primo rilascio e rimandata (FE-DEC-014).
-- Apertura dei file — analisi futura: decisione esplicitamente rinviata sull'ambito delle preferenze (FolderAI, sistema operativo o entrambi). Restano inoltre da chiarire tipo o singolo file, scelta delle applicazioni e gestione delle associazioni non più valide.
+- Apertura dei file: la preferenza è interna a FolderAI. Restano da chiarire tipo o singolo file, scelta delle applicazioni e gestione delle associazioni non più valide.
 - Scala e hardware definiti a livello orientativo in FE-DEC-060; soglie misurabili da stabilire. Esportazione/importazione rimandate (FE-DEC-059); protezione, migrazione e recupero dei dati da progettare.
 
 Queste scelte guideranno i requisiti. Schema SQL, librerie e motore vettoriale verranno valutati dopo, senza anticipare l'implementazione.
@@ -208,7 +208,7 @@ Nel primo rilascio è disponibile soltanto la rinomina di un elemento alla volta
 
 ### Esigenza confermata
 
-Cambiare l'applicazione predefinita per aprire un file deve essere intuitivo e immediato, senza obbligare l'utente a cercare impostazioni difficili da raggiungere. Non sono ancora definiti l'ambito della preferenza e il criterio di associazione.
+Cambiare l'applicazione predefinita per aprire un file deve essere intuitivo e immediato, senza obbligare l'utente a cercare impostazioni difficili da raggiungere. Il criterio di associazione resta da definire.
 
 ### Flusso di interazione proposto
 
@@ -220,12 +220,9 @@ Cambiare l'applicazione predefinita per aprire un file deve essere intuitivo e i
 
 Il flusso è una proposta da confermare, non una UI già approvata.
 
-### Distinzione di ambito — decisione rinviata
+### Ambito della preferenza — confermato
 
-**Stato:** punto di analisi futura, su indicazione esplicita dell'utente. L'esigenza di un cambio intuitivo resta confermata; non è stato scelto se supportare preferenze interne, associazioni di sistema o entrambe. Il flusso precedente resta una proposta, non una decisione.
-
-- **Preferenza interna a FolderAI:** vale per le aperture effettuate dall'app, senza modificare il comportamento delle altre applicazioni. È un'alternativa da valutare, non una scelta approvata.
-- **Associazione del sistema operativo:** cambia il comportamento anche fuori FolderAI. Se richiesta, deve essere un'azione distinta ed esplicita, soggetta ai meccanismi e ai limiti della piattaforma; non si presume che sia modificabile direttamente allo stesso modo su tutti i sistemi.
+Il cambio dell'applicazione predefinita vale esclusivamente per le aperture effettuate da FolderAI. L'associazione del sistema operativo continua a valere per le aperture da Finder, Esplora file e altre applicazioni che la usano.
 
 ### Aspetti da chiarire
 
@@ -626,7 +623,7 @@ Per la parte file explorer del primo rilascio:
 
 Rimandati: dischi esterni/rete, rinomina in blocco, editor dei documenti, anteprime Office/OpenDocument, creazione/modifica archivi, altri formati compressi ed esportazione/importazione.
 
-Ancora da analizzare: ambito delle applicazioni predefinite, matrice dei formati ricercabili e dettagli tecnici già tracciati. L'AI resta nel documento separato `03-ai-integration.md`: questa conferma non attribuisce automaticamente ogni proposta AI al primo rilascio.
+Ancora da analizzare: criterio di associazione delle applicazioni predefinite, matrice dei formati ricercabili e dettagli tecnici già tracciati. L'AI resta nel documento separato `03-ai-integration.md`: questa conferma non attribuisce automaticamente ogni proposta AI al primo rilascio.
 
 Si conclude la raccolta iniziale delle decisioni funzionali del file explorer. Il riepilogo `04-analysis-summary.md` distingue perimetro, rinvii e punti aperti; la successiva formalizzazione dei requisiti dovrà mantenere queste distinzioni.
 

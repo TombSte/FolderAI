@@ -33,7 +33,7 @@ FolderAI è una vera alternativa ai file manager di sistema, con Finder ed Esplo
 ### Operazioni, sicurezza e recupero
 
 - Creazione di file vuoti e cartelle, copia, spostamento, rinomina singola ed eliminazione; selezioni multiple, appunti e drag-and-drop.
-- Apertura con applicazione associata o «Apri con».
+- Apertura con applicazione associata o «Apri con». Il cambio dell'applicazione predefinita vale solo in FolderAI.
 - Centro attività separato per finestra. Chiudendo una finestra con trasferimenti attivi si sceglie se lasciarla aperta oppure interrompere in sicurezza i suoi trasferimenti; le altre finestre non sono coinvolte.
 - Su errore relativo a un singolo file: riprova, salta o interrompi. La scelta per errori simili vale solo nell'operazione corrente. In attesa, si sospende quella operazione, non tutta l'app.
 - «Annulla» interrompe anche il trasferimento corrente appena sicuro; rimuove la nuova copia parziale e segnala eventuali errori di pulizia. Quanto già completato rimane tale.
@@ -75,7 +75,7 @@ FolderAI è una vera alternativa ai file manager di sistema, con Finder ed Esplo
 
 - Ricerca semplice per nome, percorso, tipo/estensione, dimensioni/date disponibili, tag, note e testo nei formati supportati; nessun LLM o indice vettoriale obbligatorio.
 - Ambito selezionabile, sottocartelle facoltative, filtri AND/OR ed esclusioni tramite UI; stato della ricerca ed elementi non analizzabili visibili.
-- Ricerche salvate conservano richiesta, criteri e ambito, non risultati statici; accessibili dalla sidebar, rinominabili ed eliminabili, ricalcolate all'apertura o all'aggiornamento.
+- Le ricerche semplici salvate conservano richiesta, criteri e ambito, senza salvare un elenco statico di risultati. Sono accessibili dalla sidebar, rinominabili ed eliminabili, con risultati ricalcolati all'apertura o all'aggiornamento.
 - Collegamenti simbolici distinguibili e navigabili, conservati come link nelle copie dove supportato; niente ricorsione incontrollata.
 - Rispetto dei permessi, accessi negati espliciti, nessuna richiesta automatica di privilegi amministrativi.
 - ZIP: consultazione ed estrazione sicura nella destinazione scelta, senza scritture fuori ambito o sovrascritture implicite.
@@ -113,6 +113,7 @@ L'analisi AI rimane in `03-ai-integration.md`; il perimetro iniziale è stato su
 
 - Ricerca semplice, semantica e agentica selezionabili manualmente, insieme ad Auto.
 - Capacità AI incluse: ricerca semantica, ricerca agentica, domande sui contenuti, riassunto, confronto ed estrazione mirata anche in tabelle nella risposta.
+- Aprire una ricerca agentica salvata ripristina richiesta, ambito e filtri. Una nuova esecuzione parte con «Esegui» e segue la politica di consenso remoto configurata.
 - Strumenti di esplorazione autorizzata, ricerca e lettura dei documenti supportati; agenti iniziali in sola lettura, senza terminale o navigazione web. Il terminale manuale resta distinto.
 - Rimandati suggerimenti automatici di tag, rilevamento proattivo di duplicati/versioni e analisi periodiche senza richiesta esplicita. Input solo testuale iniziale; immagini in input in fase due, senza decidere implicitamente la copertura OCR.
 - Modelli locali e remoti; funzionamento AI completamente locale/offline con componenti adeguati.
@@ -130,7 +131,7 @@ La conferma del file explorer e del mockup **non assegna automaticamente ogni pr
 
 | Area | Da definire prima delle relative scelte o verifiche |
 | --- | --- |
-| Applicazioni predefinite | Preferenze interne a FolderAI, associazioni di sistema o entrambe; decisione esplicitamente rinviata |
+| Applicazioni predefinite | Criterio di associazione e gestione delle applicazioni indisponibili. L'ambito della preferenza è confermato e vale solo in FolderAI. |
 | Formati | Copertura iniziale per famiglie e comprensione visiva oltre OCR confermate in `06-content-formats.md`, anche per immagini/grafici in PDF e Office/OpenDocument; restano varianti precise, limiti e qualità, distinguendo anteprima e indicizzazione |
 | Piattaforme | Windows 11 x64 e macOS Apple Silicon confermati per il primo rilascio; restano versione minima macOS, filesystem supportati, compatibilità delle dipendenze e capacità/limiti delle astrazioni |
 | Identità e metadati | Riconciliazione esterna, casi ambigui, concorrenza, salvataggi pendenti e operazioni parziali |

@@ -45,7 +45,8 @@ Questo documento integra l'analisi funzionale, senza sostituire le decisioni FE-
 - Ambito iniziale cartella corrente e sottocartelle, modificabile. Filtri attivi rimovibili; condizioni AND/OR ed esclusioni in un pannello espandibile.
 - Semplice aggiornata durante la digitazione; Semantica, Agentica e Auto avviate esplicitamente, non a ogni carattere.
 - Risultati nell'area centrale con percorso, motivo della corrispondenza e stato/copertura della ricerca. Ricerca semantica con distinzione dei contenuti non indicizzati.
-- Le ricerche salvate conservano nome, richiesta, modalità, ambito e filtri; all'apertura vengono ripristinate e rieseguite.
+- Le ricerche salvate conservano nome, richiesta, modalità, ambito e filtri. L'apertura ripristina la configurazione e riesegue la ricerca, salvo in modalità Agentica.
+- Una ricerca agentica salvata richiede «Esegui» per avviare una nuova analisi. La sola apertura permette di rivedere la richiesta, l'ambito e i filtri. Si applica la politica di consenso remoto configurata.
 - In Agentica la toolbar non deve contenere tutta la richiesta: si apre il pannello conversazionale destro con input multilinea. Anche Auto permette di aprire l'input esteso prima dell'invio.
 
 ## 5. Assistente e ambito — confermati
@@ -126,7 +127,7 @@ Ordine e gruppi confermati:
 3. Aggiungi ai preferiti (scelta del gruppo, rimozione quando già presente); Tag… (assegnazione/rimozione); Modifica nota (sezione del pannello).
 4. Sposta nel cestino; Elimina definitivamente… (azione distinta e sempre confermata).
 
-La scelta delle associazioni predefinite resta il punto aperto già tracciato; confermare «Apri con» non lo risolve. Per gli originali con più collegamenti nei preferiti, il successivo blocco sidebar conferma appartenenze esplicite nel menu dell'area file, evitando rimozioni ambigue.
+Il cambio dell'applicazione predefinita vale solo in FolderAI. Il flusso per impostare la preferenza e il criterio di associazione restano da definire nella sezione 8 del documento 2. Per gli originali con più collegamenti nei preferiti, il successivo blocco sidebar conferma appartenenze esplicite nel menu dell'area file, evitando rimozioni ambigue.
 
 ### Varianti
 

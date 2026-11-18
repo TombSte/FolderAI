@@ -84,7 +84,7 @@ Distinzione proposta:
 
 - **Semplici:** conservano criteri e filtri; risultati aggiornati sullo stato disponibile del filesystem e dell'indice.
 - **Semantiche:** conservano richiesta, ambito e configurazione semantica rilevante; i risultati possono cambiare al variare dei contenuti, dell'indice o del modello.
-- **Agentiche:** conservano il compito e le impostazioni; le nuove esecuzioni sono esplicite, senza costi o invii ricorrenti impliciti.
+- **Agentiche, comportamento confermato:** aprire una ricerca salvata ripristina la richiesta, l'ambito e i filtri per consentirne la revisione. L'apertura non avvia letture dell'agente o chiamate ai provider. L'utente avvia una nuova esecuzione con «Esegui», nel rispetto delle autorizzazioni correnti e della politica di consenso remoto (AI-DEC-007).
 
 Documenti correlati, possibili versioni e contenuti simili sono suggerimenti, non fatti certi. I duplicati esatti devono essere distinti dalla semplice somiglianza; l'individuazione dei primi non richiede necessariamente AI.
 
