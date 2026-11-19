@@ -1,0 +1,18 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "FolderAI",
+        "width": 1120,
+        "height": 740,
+        "minWidth": 620,
+        "minHeight": 380,
+        "dragDropEnabled": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 14, "y": 16 }
+      }
+    ]
+  }
+}

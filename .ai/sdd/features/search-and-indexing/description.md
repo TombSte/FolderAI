@@ -28,9 +28,8 @@ DA-013–015 govern the contracts. DA-020 sets quantitative evaluation.
 - [semantic-search-and-mode-recovery](tasks/semantic-search-and-mode-recovery/context.md) (`implementation`). Implement permission-filtered semantic retrieval with ranking, excerpts, current-space selection, coverage and saved-search degradation handling.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `continuous`, selected project-wide by the user on 2026-11-19.
+- Checkpoints: feature validation and explicit final user confirmation.
 
 ## Definition of Done
 - [ ] Behavior implemented

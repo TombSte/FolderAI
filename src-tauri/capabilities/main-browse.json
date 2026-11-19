@@ -1,0 +1,29 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-browse",
+  "description": "Local browsing, navigation, workspace preferences, and organization commands in native workspace windows.",
+  "windows": ["main", "workspace-*"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "allow-browse",
+    "allow-cancel-browse",
+    "allow-load-workspace",
+    "allow-save-workspace",
+    "allow-save-startup",
+    "allow-open-workspace-window",
+    "allow-close-workspace-window",
+    "allow-load-workspace-views",
+    "allow-save-workspace-view",
+    "allow-load-workspace-controls",
+    "allow-save-workspace-controls",
+    "allow-load-organization",
+    "allow-lookup-organization-tags",
+    "allow-update-organization",
+    "allow-mutate-file",
+    "allow-copy-regular-file",
+    "allow-stop-copy",
+    "allow-move-file-or-directory"
+  ]
+}

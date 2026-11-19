@@ -26,9 +26,8 @@ DA-016 and DA-017 precede their applicable activations. Record provider, runtime
 - [remote-api-adapters](tasks/remote-api-adapters/context.md) (`implementation`). Integrate OpenAI and Anthropic APIs through the consent boundary and incorporate additional providers only where the matrix confirms coverage.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `continuous`, selected project-wide by the user on 2026-11-19.
+- Checkpoints: feature validation and explicit final user confirmation.
 
 ## Definition of Done
 - [ ] Behavior implemented

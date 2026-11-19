@@ -25,14 +25,14 @@ DA-008, DA-009 and DA-010 guide implementation. Coordinate with file transfers a
 - [favorites-tags-and-notes](tasks/favorites-tags-and-notes/context.md) (`implementation`). Implement favorites groups, tag CRUD and multi-selection, revision-checked Markdown notes, per-folder metadata and configurable copy semantics.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `human-checkpoints`, selected by the user on 2026-11-18.
+- Checkpoints: feature validation and explicit user confirmation for completion. No intermediate checkpoint has been agreed.
+- Checkpoint decisions: keep the same checkpoint mode as desktop foundation.
 
 ## Definition of Done
-- [ ] Behavior implemented
-- [ ] Tests updated or reason documented
-- [ ] Relevant validation passes
-- [ ] Docs updated or reason documented
-- [ ] Feature ready for validation
-- [ ] User confirms feature completion after successful validation.
+- [x] Local-data behavior implemented for storage, reconciliation and workspace organization. File-transfer commands consume the journal in their scheduled feature.
+- [x] Regression tests cover migration, object replacement, revision checks and copy recovery.
+- [x] Available macOS validation passes. Native Windows and release accessibility checks remain scheduled under release acceptance.
+- [x] Contract and downstream handoffs updated.
+- [x] Feature at the agreed validation checkpoint.
+- [x] User confirmed feature completion on 2026-11-19.

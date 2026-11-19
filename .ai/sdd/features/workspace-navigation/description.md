@@ -25,9 +25,9 @@ DA-002 and DA-019 govern edge cases. Final accessibility verification is in rele
 - [workspace-controls-and-settings](tasks/workspace-controls-and-settings/context.md) (`implementation`). Build configurable sidebar/toolbars/settings sections, themes, densities, IT/EN localization, accessible focus, shortcuts and command catalog.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `continuous`, selected by the user.
+- Checkpoints: feature validation and final confirmation. Resolve genuinely open behavior decisions when they are needed.
+- Checkpoint decisions: proceed with workspace navigation because its controls are a prerequisite of `local-data/favorites-tags-and-notes`.
 
 ## Definition of Done
 - [ ] Behavior implemented

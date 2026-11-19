@@ -16,7 +16,7 @@ Publishing is a separate authorized action.
 Record passing criteria, versions, hardware/provider configuration and native evidence. Close release-blocking decisions and obtain final feature confirmation after validation.
 
 ## Constraints and Dependencies
-DA-020 and DA-021 must close before final acceptance. Track missing evidence explicitly.
+DA-001, DA-020 and DA-021 must close before final acceptance. Windows native verification deferred from desktop foundation remains mandatory before release acceptance. Track missing evidence explicitly.
 
 ## Planned Tasks
 - [acceptance-protocol-and-instrumentation](tasks/acceptance-protocol-and-instrumentation/context.md) (`discovery`). Define representative corpora, hardware, accessibility procedures, measurements and thresholds. Establish the criterion-to-evidence matrix and implement measurement support in a follow-on task.
@@ -26,9 +26,8 @@ DA-020 and DA-021 must close before final acceptance. Track missing evidence exp
 - [installation-updates-and-release-signoff](tasks/installation-updates-and-release-signoff/context.md) (`validation`). Resolve packaging, signing and update decisions; build release artifacts and verify clean installation and an upgrade that preserves application data. Review acceptance evidence and obtain confirmation.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `continuous`, selected project-wide by the user on 2026-11-19.
+- Checkpoints: feature validation and explicit final user confirmation.
 
 ## Definition of Done
 - [ ] Behavior implemented

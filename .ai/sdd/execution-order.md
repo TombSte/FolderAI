@@ -4,6 +4,8 @@ The [SDD index](index.md) groups the approved backlog by feature and status. Thi
 
 Start a task only after its direct dependencies are `done` and the approved autonomy allows work to proceed. Each level shows the earliest point at which its tasks can become ready. Readiness depends on each task’s own prerequisites. Within a level, the list follows the plan order.
 
+Desktop foundation can integrate scaffold, IPC and workspace implementation while platform discovery and native validation remain open. The dependency order still applies to validation, and dependent features require their own completed prerequisites.
+
 Workspace navigation uses local storage before favorites, tags and notes are added to workspace controls. The embedding index contract and isolation precede the model adapters. The local adapters enable visual processing, which feeds persistent indexing and semantic search.
 
 Task contexts contain the authoritative dependencies. Refresh this order if the approved dependency graph changes.
@@ -11,10 +13,10 @@ Task contexts contain the authoritative dependencies. Refresh this order if the 
 ## Level 1
 
 - [desktop-foundation/platform-capability-matrix](features/desktop-foundation/tasks/platform-capability-matrix/context.md)
+- [desktop-foundation/scaffold-desktop-app](features/desktop-foundation/tasks/scaffold-desktop-app/context.md)
 
 ## Level 2
 
-- [desktop-foundation/scaffold-desktop-app](features/desktop-foundation/tasks/scaffold-desktop-app/context.md)
 - [local-data/data-and-identity-contract](features/local-data/tasks/data-and-identity-contract/context.md)
 - [file-operations/native-integration-contract](features/file-operations/tasks/native-integration-contract/context.md)
 - [release-acceptance/acceptance-protocol-and-instrumentation](features/release-acceptance/tasks/acceptance-protocol-and-instrumentation/context.md)

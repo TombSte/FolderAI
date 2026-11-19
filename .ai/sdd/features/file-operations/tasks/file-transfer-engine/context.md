@@ -16,13 +16,25 @@ Traceability covers RF-017–020 RT-006–009 RT-013.
 - Rust file commands, transfer engine and operation fixtures
 
 ## Progress
-- [ ] Complete the work described above.
+- [x] Implement exclusive empty file and directory creation and single-item rename in the workspace.
+- [x] Implement staged regular-file copy with keep-both names, independent metadata, scoped staging cleanup and cancellation between chunks.
+- [x] Implement same-volume single-item move with keep-both names and journaled reconciliation for a directory and its verified tracked descendants.
+- [x] Expose the implemented actions through the workspace context menu. Empty space offers file and folder creation. Single files and folders offer the applicable operations. Existing multiple selections are preserved when secondary-clicked.
+- [ ] Implement folder copies, transfers with multiple selected items, activity decisions and progress, and guarded source removal for cross-volume moves.
+- [ ] Integrate and exercise recoverable publication, explicit replacement and fault-injected cleanup before feature validation.
 
 ## Validation
 - Pending. Inject space exhaustion, concurrent collisions, interruption, commit and cleanup failures and cross-volume copy failure.
+- 2026-11-19 macOS/APFS. 51 Rust tests passed, including descriptor-relative creation and publication, parent substitution, repeat directory scans, Unicode enumeration across batches, and stopping before the next chunk. Strict Clippy, rustfmt and the frontend build passed.
+- Native macOS WebKit on an isolated profile exercised exclusive create, blocked rename on collision then successful retry, folder rename and same-volume move with preserved descendant ID and note, a mixed folder/file collision, concurrent numbered copies, both copy metadata settings, and an interrupted 512 MiB sparse-source copy. Confirmed the original content, no published cancelled copy and no staging residue. This uses real Tauri IPC and the actual filesystem.
+- Native macOS WebKit on an isolated profile dispatched the secondary-click event through the rendered file pane. The empty-area menu created a Unicode-named folder in the correct directory. The single-file menu renamed its target with content intact. The folder menu retained navigation actions and the bottom-right popup stayed within the viewport. The updated macOS app bundle was rebuilt.
+- Brave with synthetic IPC verified pointer and keyboard context menus at 1120 × 740 and 620 × 380. Escape returns focus to the initiating row at both widths. A secondary click on a selected row preserves multiple selection while its batch operations remain pending. The physical macOS trackpad gesture and Windows runtime were outside this probe.
+- Brave visual and interaction QA with synthetic IPC verified the controls dialog at 1120 × 740 in English/light and 620 × 380 in Italian/dark. Tested keyboard focus, visible errors, copy cancellation and destination-aware refresh. The native Windows primitives passed an isolated x64 type check. NTFS runtime, full Windows app flow and assistive technology remain release checks.
 
 ## Notes
 - See the specifications under `requirements/` for detailed acceptance criteria.
 
 ## Handoff
 - 2026-11-18 codex. Planned and ready once dependencies and implementation autonomy are resolved. Review the cited acceptance criteria, then work in the areas above. Validation is pending.
+- 2026-11-19 codex. Consume the local-data journal from `src-tauri/src/storage`. For each tracked copy entry, record intent before staging, bind an open staging handle on the destination volume, retain it across publication, and commit with `record_completed_copy`. Preserve the same operation ID across siblings and call `recover_copy` on uncertain outcomes. Use `fail_copy` only after confirming no publication. Apply `record_move` or `record_tree_move` before a native move and `recover_move` with verified live evidence afterward. Run user-facing copy tests with the preference enabled and disabled, a recursive partial copy, and commit failure with replacement during retry. Verify NTFS handle behavior and the cross-volume strategy on the native targets. See the [local data contract](../../../../../../docs/local-data/contract.md).
+- 2026-11-19 codex. User selected continuous autonomy for every feature. The existing single-entry flow is wired through `src-tauri/src/file_transfer` and `src/workspace/FileMutationControls.tsx`. Continue with anchored recursive staging and ownership-aware cleanup, then connect multi-item operations and activity decisions. Extend retained live publication witnesses into explicit engine recovery, add cross-volume source removal and verified metadata rebinding, and prove regular-file replacement before exposing it. The filesystem may change between a leaf identity check and publication. Native macOS rename/unlink have no leaf compare-and-swap. Preserve both objects on uncertain effects and never infer success from a filename. See the [transfer and undo contract](../../../../../../docs/platform-probes/transfer-contract.md).

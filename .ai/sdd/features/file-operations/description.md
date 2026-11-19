@@ -27,9 +27,8 @@ DA-003–007 and the DA-001 matrix govern support and failure behavior.
 - [links-and-zip](tasks/links-and-zip/context.md) (`implementation`). Close the ZIP/link support matrix, then add link navigation/preservation and bounded archive browsing and extraction with guarded destinations.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `continuous`, selected project-wide by the user on 2026-11-19.
+- Checkpoints: feature validation and explicit final user confirmation.
 
 ## Definition of Done
 - [ ] Behavior implemented

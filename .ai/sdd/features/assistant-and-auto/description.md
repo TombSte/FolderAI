@@ -25,9 +25,8 @@ DA-018 sets tool/routing limits. DA-002 sets coordinated closure. All tools rech
 - [auto-mode-routing](tasks/auto-mode-routing/context.md) (`implementation`). Route to the least complex adequate authorized approach with validation, clarifications, explicit effective mode and capability alternatives.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `continuous`, selected project-wide by the user on 2026-11-19.
+- Checkpoints: feature validation and explicit final user confirmation.
 
 ## Definition of Done
 - [ ] Behavior implemented

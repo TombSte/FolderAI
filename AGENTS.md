@@ -3,6 +3,10 @@
 When `.ai/sdd/` exists, use the installed `sdd` skill for relevant coding work and SDD requests. Follow project preferences; for tracked work, read feature/task state, follow saved autonomy and update handoff before stopping. Informational requests do not start implementation. If the skill is unavailable, report it; do not invent workflow rules.
 <!-- sdd:end -->
 
+## File and folder context menus
+
+When adding a command that applies to a file, folder, or folder background, also expose it in the relevant context menu in `src/workspace/FileMutationControls.tsx`. Reuse the command handler and availability rules. Every context-menu command must have a Lucide icon (`aria-hidden="true"`) alongside its visible label. When validating a new command, check that it appears with an icon on the applicable target and is not offered on unsupported targets.
+
 ## FolderAI agent team
 
 The primary agent owns the task, integrates changes, runs final validation, and updates the handoff for SDD-tracked work. Follow the user's instructions on whether to delegate. Keep ordinary questions and changes with the primary agent.

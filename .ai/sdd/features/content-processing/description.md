@@ -25,9 +25,8 @@ DA-011 and DA-012 determine variants and limits. Visual inference depends on ver
 - [ocr-and-visual-understanding](tasks/ocr-and-visual-understanding/context.md) (`implementation`). Add bounded OCR for scans/images and model-backed visual understanding for images, pages and embedded charts, preserving provenance and partial coverage.
 
 ## Autonomy
-- Mode pending user selection before implementation.
-- Checkpoints pending autonomy selection.
-- Checkpoint decisions pending.
+- Mode: `continuous`, selected project-wide by the user on 2026-11-19.
+- Checkpoints: feature validation and explicit final user confirmation.
 
 ## Definition of Done
 - [ ] Behavior implemented
