@@ -66,6 +66,16 @@ pub struct Storage {
 }
 
 impl Storage {
+    #[cfg(test)]
+    pub(crate) fn for_test(data: &Path, cache: &Path) -> Result<Self, StorageError> {
+        let storage = Self::default();
+        storage
+            .store
+            .set(Ok(Mutex::new(Store::open(data, cache)?)))
+            .map_err(|_| StorageError::Unavailable)?;
+        Ok(storage)
+    }
+
     pub fn access<R>(
         &self,
         work: impl FnOnce(&mut Store) -> Result<R, StorageError>,

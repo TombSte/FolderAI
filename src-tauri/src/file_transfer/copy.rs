@@ -93,11 +93,11 @@ fn prepare_candidate(
     Err(FileError::AlreadyExists)
 }
 
-fn version(metadata: &Metadata) -> io::Result<(u64, std::time::SystemTime)> {
+pub(super) fn version(metadata: &Metadata) -> io::Result<(u64, std::time::SystemTime)> {
     Ok((metadata.len(), metadata.modified()?))
 }
 
-fn check_cancellation(signal: &AtomicBool) -> Result<(), FileError> {
+pub(super) fn check_cancellation(signal: &AtomicBool) -> Result<(), FileError> {
     if signal.load(Ordering::Acquire) {
         Err(FileError::Cancelled)
     } else {
@@ -105,7 +105,7 @@ fn check_cancellation(signal: &AtomicBool) -> Result<(), FileError> {
     }
 }
 
-fn copy_chunks(
+pub(super) fn copy_chunks(
     source: &mut impl Read,
     destination: &mut impl Write,
     signal: &AtomicBool,
@@ -148,10 +148,10 @@ impl<'a> Stage<'a> {
 
     fn fill(
         &self,
-        mut source: File,
+        source: &mut File,
         reference: &TrackedReference,
         cancelled: &AtomicBool,
-    ) -> Result<LiveIdentity, FileError> {
+    ) -> Result<(LiveIdentity, (u64, std::time::SystemTime)), FileError> {
         let payload = OsStr::new(PAYLOAD);
         let mut staged = self.directory.create_file(payload)?;
         // The publication witness comes from this exact exclusive creation.
@@ -161,7 +161,7 @@ impl<'a> Stage<'a> {
             .map_err(|_| FileError::CleanupFailed)?;
         let result = (|| {
             let initial = version(&source.metadata()?)?;
-            if copy_chunks(&mut source, &mut staged, cancelled)? != initial.0
+            if copy_chunks(source, &mut staged, cancelled)? != initial.0
                 || version(&source.metadata()?)? != initial
                 || reference.verify_source().is_err()
             {
@@ -170,13 +170,15 @@ impl<'a> Stage<'a> {
             staged.set_times(FileTimes::new().set_modified(initial.1))?;
             staged.set_permissions(source.metadata()?.permissions())?;
             staged.sync_all()?;
-            Ok(())
+            Ok(initial)
         })();
-        if let Err(error) = result {
-            self.discard_payload(&identity)?;
-            return Err(error);
+        match result {
+            Ok(initial) => Ok((identity, initial)),
+            Err(error) => {
+                self.discard_payload(&identity)?;
+                Err(error)
+            }
         }
-        Ok(identity)
     }
 
     fn assert_payload(&self, identity: &LiveIdentity) -> Result<(), FileError> {
@@ -213,6 +215,9 @@ impl<'a> Stage<'a> {
         self.directory
             .verify()
             .map_err(|_| FileError::CleanupFailed)?;
+        if !self.directory.entries()?.is_empty() {
+            return Err(FileError::RecoveryPending);
+        }
         native::remove_directory(self.parent, &self.name).map_err(|_| FileError::CleanupFailed)
     }
 }
@@ -229,12 +234,23 @@ pub(super) fn copy_file(
     destination: &Path,
     cancelled: &AtomicBool,
 ) -> Result<(PathBuf, bool), FileError> {
+    copy_file_with_hook(storage, path, destination, cancelled, || {})
+}
+
+// The hook permits deterministic tests of changes at the staging/publication boundary.
+fn copy_file_with_hook(
+    storage: &Storage,
+    path: &Path,
+    destination: &Path,
+    cancelled: &AtomicBool,
+    after_staging: impl FnOnce(),
+) -> Result<(PathBuf, bool), FileError> {
     check_cancellation(cancelled)?;
     let source_name = path.file_name().ok_or(FileError::InvalidRequest)?;
     let origin = Directory::open(path.parent().ok_or(FileError::InvalidRequest)?)?;
     let directory = Directory::open(destination)?;
     let destination = captured_directory_path(&directory)?;
-    let source = origin.open_file(source_name)?;
+    let mut source = origin.open_file(source_name)?;
     let opened = LiveIdentity::from_file(source.try_clone()?)?;
     let LiveObservation::Present(locator) = opened.observe()? else {
         return Err(FileError::SourceChanged);
@@ -268,7 +284,7 @@ pub(super) fn copy_file(
             return Err(error);
         }
     };
-    let staged = match stage.fill(source, &reference, cancelled) {
+    let (staged, source_version) = match stage.fill(&mut source, &reference, cancelled) {
         Ok(staged) => staged,
         Err(error) => {
             abandon(storage, &candidate.1)?;
@@ -280,11 +296,21 @@ pub(super) fn copy_file(
         }
     };
 
+    after_staging();
     loop {
         let (name, intent) = candidate;
         stage.assert_payload(&staged)?;
-        if let Err(error) =
-            check_cancellation(cancelled).and_then(|_| directory.verify().map_err(FileError::from))
+        if let Err(error) = check_cancellation(cancelled)
+            .and_then(|_| directory.verify().map_err(FileError::from))
+            .and_then(|_| {
+                if version(&source.metadata()?).map_err(FileError::from)? != source_version
+                    || reference.verify_source().is_err()
+                {
+                    Err(FileError::SourceChanged)
+                } else {
+                    Ok(())
+                }
+            })
         {
             abandon(storage, &intent)?;
             stage.discard_payload(&staged)?;
@@ -340,6 +366,177 @@ pub(super) fn copy_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    struct CopyFixture(PathBuf);
+
+    impl CopyFixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!("folderai-transfer-{}", Uuid::new_v4()));
+            fs::create_dir_all(root.join("source")).unwrap();
+            fs::create_dir_all(root.join("destination")).unwrap();
+            Self(root)
+        }
+
+        fn storage(&self) -> Storage {
+            Storage::for_test(&self.0.join("data"), &self.0.join("cache")).unwrap()
+        }
+
+        fn source(&self) -> PathBuf {
+            self.0.join("source/document.txt")
+        }
+
+        fn destination(&self) -> PathBuf {
+            self.0.join("destination")
+        }
+    }
+
+    impl Drop for CopyFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn copy_rechecks_source_version_at_publication_boundary() {
+        let fixture = CopyFixture::new();
+        let storage = fixture.storage();
+        let source = fixture.source();
+        fs::write(&source, b"original").unwrap();
+        let cancelled = AtomicBool::new(false);
+        let result = copy_file_with_hook(
+            &storage,
+            &source,
+            &fixture.destination(),
+            &cancelled,
+            || {
+                fs::write(&source, b"changed while staging").unwrap();
+            },
+        );
+        assert_eq!(result, Err(FileError::SourceChanged));
+        assert_eq!(fs::read(&source).unwrap(), b"changed while staging");
+        assert_eq!(fs::read_dir(fixture.destination()).unwrap().count(), 0);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn copy_rejects_source_replacement_after_staging() {
+        let fixture = CopyFixture::new();
+        let storage = fixture.storage();
+        let source = fixture.source();
+        let original = fixture.0.join("source/original.txt");
+        fs::write(&source, b"original").unwrap();
+        let cancelled = AtomicBool::new(false);
+        let result = copy_file_with_hook(
+            &storage,
+            &source,
+            &fixture.destination(),
+            &cancelled,
+            || {
+                fs::rename(&source, &original).unwrap();
+                fs::write(&source, b"replacement").unwrap();
+            },
+        );
+        assert_eq!(result, Err(FileError::SourceChanged));
+        assert_eq!(fs::read(&original).unwrap(), b"original");
+        assert_eq!(fs::read(&source).unwrap(), b"replacement");
+        assert_eq!(fs::read_dir(fixture.destination()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn cancellation_after_staging_preserves_source_and_removes_owned_stage() {
+        let fixture = CopyFixture::new();
+        let storage = fixture.storage();
+        let source = fixture.source();
+        fs::write(&source, b"original").unwrap();
+        let cancelled = AtomicBool::new(false);
+        let result = copy_file_with_hook(
+            &storage,
+            &source,
+            &fixture.destination(),
+            &cancelled,
+            || {
+                cancelled.store(true, Ordering::Release);
+            },
+        );
+        assert_eq!(result, Err(FileError::Cancelled));
+        assert_eq!(fs::read(&source).unwrap(), b"original");
+        assert_eq!(fs::read_dir(fixture.destination()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn empty_stage_cleanup_preserves_unexpected_entry() {
+        let fixture = CopyFixture::new();
+        let destination = Directory::open(&fixture.destination()).unwrap();
+        let stage = Stage::prepare(&destination, &Uuid::new_v4().to_string()).unwrap();
+        let entry = stage.directory.path().join("unexpected");
+        fs::write(&entry, b"not ours").unwrap();
+        assert_eq!(stage.discard_empty(), Err(FileError::RecoveryPending));
+        assert_eq!(fs::read(entry).unwrap(), b"not ours");
+    }
+
+    #[test]
+    fn cancellation_preserves_unexpected_staging_entries() {
+        let fixture = CopyFixture::new();
+        let storage = fixture.storage();
+        let source = fixture.source();
+        let destination = fixture.destination();
+        fs::write(&source, b"original").unwrap();
+        let cancelled = AtomicBool::new(false);
+        let result = copy_file_with_hook(&storage, &source, &destination, &cancelled, || {
+            let stage = fs::read_dir(&destination)
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path();
+            fs::write(stage.join("unexpected"), b"not ours").unwrap();
+            cancelled.store(true, Ordering::Release);
+        });
+        assert_eq!(result, Err(FileError::RecoveryPending));
+        assert_eq!(fs::read(&source).unwrap(), b"original");
+        let stages = fs::read_dir(&destination)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(stages.len(), 1);
+        assert_eq!(
+            fs::read(stages[0].path().join("unexpected")).unwrap(),
+            b"not ours"
+        );
+        assert_eq!(
+            fs::read(stages[0].path().join(PAYLOAD)).unwrap(),
+            b"original"
+        );
+        assert_eq!(fs::read_dir(stages[0].path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn collision_after_staging_preserves_existing_target_and_retries() {
+        let fixture = CopyFixture::new();
+        let storage = fixture.storage();
+        let source = fixture.source();
+        let destination = fixture.destination();
+        fs::write(&source, b"original").unwrap();
+        let cancelled = AtomicBool::new(false);
+        let (output, cleanup_pending) =
+            copy_file_with_hook(&storage, &source, &destination, &cancelled, || {
+                fs::write(destination.join("document.txt"), b"other").unwrap();
+            })
+            .unwrap();
+        assert!(!cleanup_pending);
+        assert_eq!(
+            output.file_name().unwrap(),
+            OsStr::new("document - copy.txt")
+        );
+        assert_eq!(fs::read(&output).unwrap(), b"original");
+        assert_eq!(
+            fs::read(destination.join("document.txt")).unwrap(),
+            b"other"
+        );
+        assert_eq!(fs::read(&source).unwrap(), b"original");
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 2);
+    }
 
     #[test]
     fn cancelling_after_a_chunk_stops_before_the_next_write() {

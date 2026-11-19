@@ -1,5 +1,9 @@
 mod copy;
 mod native;
+// The tree staging primitive is deliberately not exposed until it is wired to
+// per-entry journal intents and publication recovery.
+#[allow(dead_code)]
+mod tree;
 
 use crate::{
     filesystem,
