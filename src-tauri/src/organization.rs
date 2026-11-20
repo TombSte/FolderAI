@@ -868,14 +868,10 @@ mod tests {
 
     fn database() -> Connection {
         let database = Connection::open_in_memory().unwrap();
-        database
-            .execute_batch(concat!(
-                "PRAGMA foreign_keys=ON; ",
-                include_str!("storage/schema/001.sql"),
-                include_str!("storage/schema/002.sql"),
-                include_str!("storage/schema/003.sql"),
-            ))
-            .unwrap();
+        database.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        for migration in crate::storage::MIGRATIONS {
+            database.execute_batch(migration).unwrap();
+        }
         database
     }
 

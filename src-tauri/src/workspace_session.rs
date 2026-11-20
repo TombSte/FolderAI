@@ -478,6 +478,11 @@ pub(crate) fn close_workspace_window(window: WebviewWindow) -> Result<(), Sessio
     if !authorized {
         return Err(SessionError::InvalidRequest);
     }
+    if crate::file_transfer::window_has_transfers(window.app_handle(), window.label())
+        .map_err(|_| SessionError::Unavailable)?
+    {
+        return Err(SessionError::Unavailable);
+    }
     window.destroy().map_err(|_| SessionError::Unavailable)
 }
 
@@ -494,6 +499,15 @@ pub(crate) fn on_run_event(app: &AppHandle, event: RunEvent) {
             event: WindowEvent::Destroyed,
             ..
         } => {
+            app.state::<crate::file_transfer::batch::BatchTransfers>()
+                .forget_window(&label);
+            app.state::<crate::file_transfer::undo::UndoSlots>()
+                .forget_window(&label);
+            app.state::<crate::file_transfer::removal::RemovalApprovals>()
+                .forget_window(&label);
+            #[cfg(target_os = "macos")]
+            app.state::<crate::file_transfer::ReplacementApprovals>()
+                .forget_window(&label);
             let should_prune = state
                 .0
                 .lock()

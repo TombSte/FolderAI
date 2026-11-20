@@ -1,15 +1,21 @@
+pub(crate) mod batch;
 mod copy;
+mod cross_file;
 mod native;
-// The tree staging primitive is deliberately not exposed until it is wired to
-// per-entry journal intents and publication recovery.
-#[allow(dead_code)]
+pub(crate) mod removal;
+#[cfg(target_os = "macos")]
+mod replacement;
+mod trash;
 mod tree;
+pub(crate) mod undo;
+pub(crate) mod zip_archive;
 
 use crate::{
     filesystem,
     local_identity::{LiveIdentity, LiveObservation, Locator},
     storage::{MoveKey, MoveRecovery, Storage, StorageError, Store, TrackedReference},
 };
+use batch::{BatchFailure, BatchItem, TransferKind};
 use native::Directory;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -27,7 +33,7 @@ use uuid::Uuid;
 
 const MAX_PATH_BYTES: usize = 128 * 1024;
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum FileError {
     InvalidRequest,
@@ -94,6 +100,130 @@ impl Transfers {
 pub(crate) struct CopyResult {
     path: String,
     cleanup_pending: bool,
+    recovery_pending: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    staging_path: Option<String>,
+}
+
+impl CopyResult {
+    fn completed(path: PathBuf, cleanup_pending: bool) -> Result<Self, FileError> {
+        Ok(Self {
+            path: path
+                .into_os_string()
+                .into_string()
+                .map_err(|_| FileError::RecoveryPending)?,
+            cleanup_pending,
+            recovery_pending: false,
+            staging_path: None,
+        })
+    }
+}
+
+enum PendingCopy {
+    File(Box<copy::PendingFileCopy>),
+    Tree(tree::PendingTreeCopy),
+    CrossFile(Box<cross_file::PendingCrossFile>),
+    CrossTree(Box<tree::cross_tree::CrossTreeMove>),
+    #[cfg(target_os = "macos")]
+    Replacement(Box<replacement::ReplacementRecovery>),
+}
+
+impl PendingCopy {
+    fn path(&self) -> &Path {
+        match self {
+            Self::File(copy) => copy.path(),
+            Self::Tree(copy) => copy.path(),
+            Self::CrossFile(movement) => movement.path(),
+            Self::CrossTree(movement) => movement.path(),
+            #[cfg(target_os = "macos")]
+            Self::Replacement(copy) => copy.destination_path(),
+        }
+    }
+
+    fn commit(&mut self, storage: &Storage) -> Result<(PathBuf, bool), FileError> {
+        match self {
+            Self::File(copy) => copy.commit(storage),
+            Self::Tree(copy) => copy.commit(storage),
+            Self::CrossFile(movement) => movement.commit(storage),
+            Self::CrossTree(movement) => movement.commit(storage),
+            #[cfg(target_os = "macos")]
+            Self::Replacement(copy) => copy.retry(storage),
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct CopyRecoveries(Mutex<HashMap<(String, Uuid, usize), PendingCopy>>);
+
+impl CopyRecoveries {
+    fn remember(
+        &self,
+        owner: &str,
+        request: Uuid,
+        index: usize,
+        pending: PendingCopy,
+    ) -> Result<(), FileError> {
+        let mut copies = self.0.lock().map_err(|_| FileError::RecoveryPending)?;
+        let entry = copies.entry((owner.to_owned(), request, index));
+        match entry {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(pending);
+                Ok(())
+            }
+            std::collections::hash_map::Entry::Occupied(_) => Err(FileError::RecoveryPending),
+        }
+    }
+
+    fn has_pending(&self, owner: &str, request: Uuid, index: usize) -> Result<bool, FileError> {
+        let copies = self.0.lock().map_err(|_| FileError::Unavailable)?;
+        Ok(copies.contains_key(&(owner.to_owned(), request, index)))
+    }
+
+    fn retry(
+        &self,
+        owner: &str,
+        request: Uuid,
+        index: usize,
+        storage: &Storage,
+    ) -> Result<(PathBuf, bool), FileError> {
+        let mut copies = self.0.lock().map_err(|_| FileError::RecoveryPending)?;
+        let key = (owner.to_owned(), request, index);
+        let copy = copies.get_mut(&key).ok_or(FileError::RecoveryPending)?;
+        let output = copy.commit(storage)?;
+        copies.remove(&key);
+        Ok(output)
+    }
+}
+
+fn finish_pending(
+    app: &tauri::AppHandle,
+    owner: &str,
+    request_id: Uuid,
+    index: usize,
+    pending: PendingCopy,
+) -> Result<CopyResult, FileError> {
+    let path = pending.path().to_owned();
+    let staging_path = match &pending {
+        PendingCopy::CrossFile(movement) => {
+            Some(movement.staging_path().to_string_lossy().into_owned())
+        }
+        PendingCopy::CrossTree(movement) => {
+            Some(movement.staging_path().to_string_lossy().into_owned())
+        }
+        #[cfg(target_os = "macos")]
+        PendingCopy::Replacement(copy) => Some(copy.staging_path().to_string_lossy().into_owned()),
+        _ => None,
+    };
+    let mut result = CopyResult::completed(path, false)?;
+    result.staging_path = staging_path;
+    #[cfg(target_os = "macos")]
+    if let PendingCopy::Replacement(copy) = &pending {
+        result.cleanup_pending = copy.metadata_committed();
+    }
+    app.state::<CopyRecoveries>()
+        .remember(owner, request_id, index, pending)?;
+    result.recovery_pending = true;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -101,8 +231,24 @@ pub(crate) async fn copy_regular_file(
     window: WebviewWindow,
     request: CopyRequest,
 ) -> Result<CopyResult, FileError> {
+    copy_single(window, request, false).await
+}
+
+#[tauri::command]
+pub(crate) async fn copy_directory(
+    window: WebviewWindow,
+    request: CopyRequest,
+) -> Result<CopyResult, FileError> {
+    copy_single(window, request, true).await
+}
+
+async fn copy_single(
+    window: WebviewWindow,
+    request: CopyRequest,
+    is_directory: bool,
+) -> Result<CopyResult, FileError> {
     let source = parse_path(request.source)?;
-    let directory = parse_path(request.directory)?;
+    let destination = parse_path(request.directory)?;
     let request_id = request
         .request_id
         .as_deref()
@@ -111,21 +257,220 @@ pub(crate) async fn copy_regular_file(
         .map_err(|_| FileError::InvalidRequest)?
         .unwrap_or_else(Uuid::new_v4);
     let owner = window.label().to_owned();
-    let cancelled = window
+    let app = window.app_handle().clone();
+    let cancelled = app
         .state::<Transfers>()
         .register(owner.clone(), request_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = (|| {
+            if app
+                .state::<CopyRecoveries>()
+                .has_pending(&owner, request_id, 0)?
+            {
+                return Err(FileError::RecoveryPending);
+            }
+            let directory = Directory::open(&destination)?;
+            copy_item(
+                BatchItem {
+                    app: &app,
+                    owner: &owner,
+                    operation: request_id,
+                    index: 0,
+                    attempt: 0,
+                    kind: TransferKind::Copy,
+                    source: &source,
+                    destination: &directory,
+                    cancelled: &cancelled,
+                },
+                is_directory,
+            )
+        })();
+        if result.as_ref().is_ok_and(|result| !result.recovery_pending) {
+            app.state::<undo::UndoSlots>().record(&app, &owner, None);
+        }
+        app.state::<Transfers>().finish(owner, request_id);
+        result
+    })
+    .await
+    .map_err(|_| FileError::Unavailable)?
+}
+
+fn copy_item(item: BatchItem<'_>, is_directory: bool) -> Result<CopyResult, FileError> {
+    let BatchItem {
+        app,
+        owner,
+        operation: request,
+        index,
+        attempt,
+        source,
+        destination,
+        cancelled,
+        ..
+    } = item;
+    let operation = request.to_string();
+    let item_key = format!("{index}:{attempt}");
+    let storage = app.state::<Storage>();
+    if is_directory {
+        match tree::copy_tree(
+            &storage,
+            source,
+            destination,
+            (&operation, &item_key),
+            cancelled,
+        )? {
+            tree::TreeOutcome::Completed(path, cleanup) => CopyResult::completed(path, cleanup),
+            tree::TreeOutcome::Pending(pending) => {
+                finish_pending(app, owner, request, index, PendingCopy::Tree(pending))
+            }
+        }
+    } else {
+        match copy::copy_file_in(
+            &storage,
+            source,
+            destination,
+            (&operation, &item_key),
+            cancelled,
+        )? {
+            copy::FileOutcome::Completed(path, cleanup) => CopyResult::completed(path, cleanup),
+            copy::FileOutcome::Pending(pending) => {
+                finish_pending(app, owner, request, index, PendingCopy::File(pending))
+            }
+        }
+    }
+}
+
+fn perform_batch_item(item: BatchItem<'_>) -> Result<CopyResult, BatchFailure> {
+    let destination = item.destination;
+    let outcome = match item.kind {
+        TransferKind::Copy => {
+            let metadata = std::fs::symlink_metadata(item.source)
+                .map_err(|error| BatchFailure::Item(error.into()))?;
+            if metadata.is_dir() || metadata.is_file() {
+                let result = copy_item(item, metadata.is_dir());
+                if result.as_ref().is_ok_and(|result| !result.recovery_pending) {
+                    item.app.state::<undo::UndoSlots>().record_batch_item(
+                        item.owner,
+                        item.operation,
+                        None,
+                    );
+                }
+                result
+            } else {
+                Err(FileError::Unsupported)
+            }
+        }
+        TransferKind::Move => move_batch_item(item),
+    };
+    match outcome {
+        Ok(result) => Ok(result),
+        Err(
+            error @ (FileError::RecoveryPending | FileError::CleanupFailed | FileError::Cancelled),
+        ) => Err(BatchFailure::Item(error)),
+        Err(error) if error == FileError::StorageFull || destination.verify().is_err() => {
+            Err(BatchFailure::Destination(error))
+        }
+        Err(error) => Err(BatchFailure::Item(error)),
+    }
+}
+
+fn move_batch_item(item: BatchItem<'_>) -> Result<CopyResult, FileError> {
+    let BatchItem {
+        app,
+        owner,
+        operation,
+        index,
+        attempt,
+        source,
+        destination,
+        cancelled,
+        ..
+    } = item;
+    let storage = app.state::<Storage>();
+    let origin = Directory::open(source.parent().ok_or(FileError::InvalidRequest)?)?;
+    if origin.same_volume(destination)? {
+        let movement = move_in_directory(&storage, source, &origin, destination, cancelled)?;
+        if movement.changed {
+            app.state::<undo::UndoSlots>()
+                .record_batch_item(owner, operation, movement.undo);
+        }
+        return CopyResult::completed(movement.path, false);
+    }
+    let operation_id = operation.to_string();
+    let item_key = format!("{index}:{attempt}");
+    let metadata = std::fs::symlink_metadata(source)?;
+    let result = if metadata.is_dir() {
+        match tree::cross_tree::move_tree(
+            &storage,
+            source,
+            destination,
+            (&operation_id, &item_key),
+            cancelled,
+        )? {
+            tree::cross_tree::CrossTreeOutcome::Completed(path, cleanup) => {
+                CopyResult::completed(path, cleanup)
+            }
+            tree::cross_tree::CrossTreeOutcome::Pending(movement) => finish_pending(
+                app,
+                owner,
+                operation,
+                index,
+                PendingCopy::CrossTree(movement),
+            ),
+        }
+    } else if metadata.is_file() {
+        match cross_file::move_file(
+            &storage,
+            source,
+            destination,
+            (&operation_id, &item_key),
+            cancelled,
+        )? {
+            cross_file::CrossFileOutcome::Completed(path, cleanup) => {
+                CopyResult::completed(path, cleanup)
+            }
+            cross_file::CrossFileOutcome::Pending(movement) => finish_pending(
+                app,
+                owner,
+                operation,
+                index,
+                PendingCopy::CrossFile(movement),
+            ),
+        }
+    } else {
+        Err(FileError::Unsupported)
+    };
+    if result.as_ref().is_ok_and(|result| !result.recovery_pending) {
+        app.state::<undo::UndoSlots>()
+            .record_batch_item(owner, operation, None);
+    }
+    result
+}
+
+#[tauri::command]
+pub(crate) async fn recover_copy_transfer(
+    window: WebviewWindow,
+    request_id: String,
+    item_index: Option<usize>,
+) -> Result<CopyResult, FileError> {
+    let request_id = Uuid::parse_str(&request_id).map_err(|_| FileError::InvalidRequest)?;
+    let owner = window.label().to_owned();
     let app = window.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let result = copy::copy_file(&app.state::<Storage>(), &source, &directory, &cancelled);
-        app.state::<Transfers>().finish(owner, request_id);
-        let (path, cleanup_pending) = result?;
-        Ok(CopyResult {
-            path: path
-                .into_os_string()
-                .into_string()
-                .map_err(|_| FileError::RecoveryPending)?,
-            cleanup_pending,
-        })
+        let (path, cleanup) = app.state::<CopyRecoveries>().retry(
+            &owner,
+            request_id,
+            item_index.unwrap_or(0),
+            &app.state::<Storage>(),
+        )?;
+        let result = CopyResult::completed(path, cleanup)?;
+        if item_index.is_none() {
+            app.state::<undo::UndoSlots>().record(&app, &owner, None);
+        }
+        if let Some(index) = item_index {
+            app.state::<batch::BatchTransfers>()
+                .record_recovered(&app, &owner, request_id, index, &result);
+        }
+        Ok(result)
     })
     .await
     .map_err(|_| FileError::Unavailable)?
@@ -141,6 +486,169 @@ pub(crate) fn stop_copy(window: WebviewWindow, request_id: String) -> Result<boo
         return Ok(true);
     }
     Ok(false)
+}
+
+pub(crate) fn window_has_transfers(app: &tauri::AppHandle, owner: &str) -> Result<bool, FileError> {
+    let transfers = app.state::<Transfers>();
+    let active = transfers.0.lock().map_err(|_| FileError::Unavailable)?;
+    Ok(active.keys().any(|(window, _)| window == owner)
+        || app.state::<batch::BatchTransfers>().has_active(owner)?)
+}
+
+#[tauri::command]
+pub(crate) fn has_window_transfers(window: WebviewWindow) -> Result<bool, FileError> {
+    window_has_transfers(window.app_handle(), window.label())
+}
+
+#[tauri::command]
+pub(crate) async fn stop_window_transfers(window: WebviewWindow) -> Result<(), FileError> {
+    let app = window.app_handle().clone();
+    let owner = window.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || {
+        {
+            let transfers = app.state::<Transfers>();
+            let active = transfers.0.lock().map_err(|_| FileError::Unavailable)?;
+            for ((window, _), signal) in active.iter() {
+                if window == &owner {
+                    signal.store(true, Ordering::Release);
+                }
+            }
+        }
+        app.state::<batch::BatchTransfers>()
+            .stop_all(&app, &owner)?;
+        while window_has_transfers(&app, &owner)? {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|_| FileError::Unavailable)?
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+pub(crate) struct ReplacementApprovals(
+    Mutex<HashMap<String, (Uuid, replacement::ReplacementTarget)>>,
+);
+
+#[cfg(target_os = "macos")]
+impl ReplacementApprovals {
+    pub(crate) fn forget_window(&self, owner: &str) {
+        if let Ok(mut approvals) = self.0.lock() {
+            approvals.remove(owner);
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ReplacementApproval {
+    request_id: String,
+    path: String,
+}
+
+#[tauri::command]
+pub(crate) async fn prepare_file_replacement(
+    window: WebviewWindow,
+    path: String,
+) -> Result<ReplacementApproval, FileError> {
+    #[cfg(windows)]
+    {
+        let _ = (window, path);
+        Err(FileError::Unsupported)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let path = parse_path(path)?;
+        let owner = window.label().to_owned();
+        let app = window.app_handle().clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let candidate = replacement::ReplacementTarget::capture(&path)?;
+            if app.get_webview_window(&owner).is_none() {
+                return Err(FileError::Cancelled);
+            }
+            let request_id = Uuid::new_v4();
+            let path = candidate
+                .path()
+                .to_str()
+                .ok_or(FileError::InvalidRequest)?
+                .to_owned();
+            let approvals = app.state::<ReplacementApprovals>();
+            approvals
+                .0
+                .lock()
+                .map_err(|_| FileError::Unavailable)?
+                .insert(owner, (request_id, candidate));
+            Ok(ReplacementApproval {
+                request_id: request_id.to_string(),
+                path,
+            })
+        })
+        .await
+        .map_err(|_| FileError::Unavailable)?
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn replace_regular_file(
+    window: WebviewWindow,
+    source: String,
+    request_id: String,
+) -> Result<CopyResult, FileError> {
+    #[cfg(windows)]
+    {
+        let _ = (window, source, request_id);
+        Err(FileError::Unsupported)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let source = parse_path(source)?;
+        let request_id = Uuid::parse_str(&request_id).map_err(|_| FileError::InvalidRequest)?;
+        let app = window.app_handle().clone();
+        let owner = window.label().to_owned();
+        let target = {
+            let approvals = app.state::<ReplacementApprovals>();
+            let mut approvals = approvals.0.lock().map_err(|_| FileError::Unavailable)?;
+            if approvals
+                .get(&owner)
+                .is_none_or(|(id, _)| *id != request_id)
+            {
+                return Err(FileError::InvalidRequest);
+            }
+            approvals.remove(&owner).ok_or(FileError::InvalidRequest)?.1
+        };
+        let cancelled = app
+            .state::<Transfers>()
+            .register(owner.clone(), request_id)?;
+        tauri::async_runtime::spawn_blocking(move || {
+            let result = match replacement::replace_file(
+                &app.state::<Storage>(),
+                &source,
+                target,
+                &cancelled,
+            ) {
+                Ok(replacement::ReplacementOutcome::Completed {
+                    path,
+                    cleanup_pending,
+                }) => CopyResult::completed(path, cleanup_pending),
+                Ok(replacement::ReplacementOutcome::RecoveryPending(pending)) => finish_pending(
+                    &app,
+                    &owner,
+                    request_id,
+                    0,
+                    PendingCopy::Replacement(pending),
+                ),
+                Err(error) => Err(error),
+            };
+            if result.as_ref().is_ok_and(|result| !result.recovery_pending) {
+                app.state::<undo::UndoSlots>().record(&app, &owner, None);
+            }
+            app.state::<Transfers>().finish(owner, request_id);
+            result
+        })
+        .await
+        .map_err(|_| FileError::Unavailable)?
+    }
 }
 
 impl From<StorageError> for FileError {
@@ -270,12 +778,48 @@ fn tracked_move(store: &mut Store, source: &Locator) -> Result<TrackedMove, Stor
     })
 }
 
-fn rename(storage: &Storage, path: &Path, name: &OsStr) -> Result<PathBuf, FileError> {
+struct CompletedMove {
+    path: PathBuf,
+    undo: Option<undo::UndoMove>,
+    changed: bool,
+}
+
+fn remember_move(
+    origin: &Directory,
+    old_name: &OsStr,
+    destination: &Directory,
+    path: PathBuf,
+    witness: LiveIdentity,
+    old_location: &LiveObservation,
+) -> CompletedMove {
+    let changed = witness.observe().is_ok_and(|now| &now != old_location);
+    let undo = if changed {
+        undo::UndoMove::capture(origin, old_name, destination, &path, witness).ok()
+    } else {
+        None
+    };
+    CompletedMove {
+        path,
+        undo,
+        changed,
+    }
+}
+
+fn rename(storage: &Storage, path: &Path, name: &OsStr) -> Result<CompletedMove, FileError> {
     let parent = path.parent().ok_or(FileError::InvalidRequest)?;
     let source_name = path.file_name().ok_or(FileError::InvalidRequest)?;
     let directory = Directory::open(parent)?;
     let witness = open_move_source(&directory, source_name)?;
-    move_entry(storage, &directory, source_name, &witness, &directory, name)
+    let old_location = witness.observe()?;
+    let path = move_entry(storage, &directory, source_name, &witness, &directory, name)?;
+    Ok(remember_move(
+        &directory,
+        source_name,
+        &directory,
+        path,
+        witness,
+        &old_location,
+    ))
 }
 
 fn open_move_source(origin: &Directory, name: &OsStr) -> Result<LiveIdentity, FileError> {
@@ -391,40 +935,80 @@ pub(crate) struct MoveRequest {
     directory: String,
 }
 
+fn move_to_directory(
+    storage: &Storage,
+    source: &Path,
+    destination: &Directory,
+    cancelled: &AtomicBool,
+) -> Result<CompletedMove, FileError> {
+    let origin = Directory::open(source.parent().ok_or(FileError::InvalidRequest)?)?;
+    move_in_directory(storage, source, &origin, destination, cancelled)
+}
+
+fn move_in_directory(
+    storage: &Storage,
+    source: &Path,
+    origin: &Directory,
+    destination: &Directory,
+    cancelled: &AtomicBool,
+) -> Result<CompletedMove, FileError> {
+    let name = source.file_name().ok_or(FileError::InvalidRequest)?;
+    let source_witness = open_move_source(origin, name)?;
+    let source_kind = source_witness.kind()?;
+    let old_location = source_witness.observe()?;
+    for sequence in 0..10_000 {
+        copy::check_cancellation(cancelled)?;
+        let candidate = copy::copy_name(name, sequence, source_kind == "directory");
+        match move_entry(
+            storage,
+            origin,
+            name,
+            &source_witness,
+            destination,
+            &candidate,
+        ) {
+            Err(FileError::AlreadyExists) => continue,
+            Ok(path) => {
+                return Ok(remember_move(
+                    origin,
+                    name,
+                    destination,
+                    path,
+                    source_witness,
+                    &old_location,
+                ));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(FileError::AlreadyExists)
+}
+
 #[tauri::command]
 pub(crate) async fn move_file_or_directory(
     window: WebviewWindow,
     request: MoveRequest,
 ) -> Result<String, FileError> {
+    let owner = window.label().to_owned();
     let app = window.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let source = parse_path(request.source)?;
-        let name = source.file_name().ok_or(FileError::InvalidRequest)?;
-        let origin = Directory::open(source.parent().ok_or(FileError::InvalidRequest)?)?;
         let destination = Directory::open(&parse_path(request.directory)?)?;
-        let source_witness = open_move_source(&origin, name)?;
-        let source_kind = source_witness.kind()?;
-        for sequence in 0..10_000 {
-            let candidate = copy::copy_name(name, sequence, source_kind == "directory");
-            match move_entry(
-                &app.state::<Storage>(),
-                &origin,
-                name,
-                &source_witness,
-                &destination,
-                &candidate,
-            ) {
-                Ok(path) => {
-                    return path
-                        .into_os_string()
-                        .into_string()
-                        .map_err(|_| FileError::RecoveryPending);
-                }
-                Err(FileError::AlreadyExists) => continue,
-                Err(error) => return Err(error),
-            }
+        let movement = move_to_directory(
+            &app.state::<Storage>(),
+            &source,
+            &destination,
+            &AtomicBool::new(false),
+        )?;
+        if movement.changed {
+            app.state::<undo::UndoSlots>()
+                .record(&app, &owner, movement.undo);
         }
-        Err(FileError::AlreadyExists)
+        movement
+            .path
+            .into_os_string()
+            .into_string()
+            .map_err(|_| FileError::RecoveryPending)
     })
     .await
     .map_err(|_| FileError::Unavailable)?
@@ -435,6 +1019,7 @@ pub(crate) async fn mutate_file(
     window: WebviewWindow,
     request: Mutation,
 ) -> Result<String, FileError> {
+    let owner = window.label().to_owned();
     let app = window.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let path = match request {
@@ -444,10 +1029,17 @@ pub(crate) async fn mutate_file(
                 is_directory,
             } => {
                 let directory = Directory::open(&parse_path(directory)?)?;
-                create_in_directory(&directory, leaf(&name)?, is_directory)?
+                let path = create_in_directory(&directory, leaf(&name)?, is_directory)?;
+                app.state::<undo::UndoSlots>().record(&app, &owner, None);
+                path
             }
             Mutation::Rename { path, name } => {
-                rename(&app.state::<Storage>(), &parse_path(path)?, leaf(&name)?)?
+                let movement = rename(&app.state::<Storage>(), &parse_path(path)?, leaf(&name)?)?;
+                if movement.changed {
+                    app.state::<undo::UndoSlots>()
+                        .record(&app, &owner, movement.undo);
+                }
+                movement.path
             }
         };
         path.into_os_string()

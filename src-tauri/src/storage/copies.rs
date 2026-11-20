@@ -36,6 +36,12 @@ pub struct CopyPublication {
     staging_location: Locator,
 }
 
+impl CopyPublication {
+    pub(crate) fn is_present_at(&self, destination: &Locator) -> io::Result<bool> {
+        Ok(self.identity.observe()? == LiveObservation::Present(destination.clone()))
+    }
+}
+
 impl CopyIntent {
     pub fn destination(&self) -> &Locator {
         &self.destination
@@ -157,7 +163,8 @@ impl Store {
     ) -> Result<bool, StorageError> {
         Ok(self.connection.query_row(
             "SELECT EXISTS (SELECT 1 FROM operation_items WHERE destination=?1
-             AND kind='copy' AND state IN ('planned','recovery'))",
+             AND (kind='copy' OR (kind='move' AND cross_move_nonce IS NOT NULL))
+             AND state IN ('planned','recovery'))",
             [destination.encode()],
             |row| row.get(0),
         )?)

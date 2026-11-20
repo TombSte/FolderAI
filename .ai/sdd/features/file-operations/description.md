@@ -10,7 +10,7 @@ Native concurrency, partial results and filesystem differences require explicit 
 Mutations, transfers, activity UI, safe replacement, undo, native integration, links and ZIP.
 
 ## Out of Scope
-External drives, network sources, batch rename, archive creation and formats beyond ZIP are outside release scope.
+External drives, network sources, batch rename, archive formats beyond ZIP, and archive creation other than compressing a single file or folder to ZIP are outside release scope.
 
 ## Acceptance Criteria
 Demonstrate native operations and fault-injected transfers with safe collision, interruption and restoration outcomes.

@@ -1,14 +1,21 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Copy, Ellipsis, FilePlus2, FolderInput, FolderOpen, FolderPlus, ListChecks, PanelTop, Pencil, SquareArrowOutUpRight } from 'lucide-react';
-import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { parentPath, pathLabel } from './paths';
+import { listen } from '@tauri-apps/api/event';
+import { Archive, FileArchive, Trash2, Undo2, Copy, Ellipsis, FilePlus2, FolderInput, FolderOpen, FolderPlus, ListChecks, PanelTop, Pencil, Replace, SquareArrowOutUpRight } from 'lucide-react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type FormEvent } from 'react';
+import { parentPath } from './paths';
 import { locale, strings } from './strings';
 import './file-mutations.scss';
+
+export function WorkspaceContextMenu(props: ComponentPropsWithRef<'div'>) {
+  return <div {...props} className="file-mutation-actions file-context-actions" role="group"
+    onContextMenu={event => event.preventDefault()} />;
+}
 
 export type FileActionSelection = { path: string; name: string; kind: 'file' | 'directory' };
 export type FileActionContext = {
   directory: string;
   selection: FileActionSelection | null;
+  sources?: FileActionSelection[];
   x: number;
   y: number;
   anchor: HTMLElement | null;
@@ -16,14 +23,14 @@ export type FileActionContext = {
 type Action =
   | { kind: 'create'; directory: string; isDirectory: boolean }
   | { kind: 'rename'; directory: string; path: string }
-  | { kind: 'copy'; source: string }
-  | { kind: 'move'; source: string; directory: string };
+  | { kind: 'transfer'; transfer: 'copy' | 'move'; sources: string[] }
+  | { kind: 'replace'; source: string };
 type Request =
   | { kind: 'create'; directory: string; name: string; isDirectory: boolean }
   | { kind: 'rename'; path: string; name: string };
-type CopyResult = { path: string; cleanupPending: boolean };
-type TransferResult = (CopyResult & { kind: 'copy' })
-  | { kind: 'move'; path: string; disposition: 'moved' | 'kept-both' | 'already-there' };
+type CopyResult = { path: string; cleanupPending: boolean; recoveryPending?: boolean; stagingPath?: string };
+type ReplacementApproval = { path: string; requestId: string };
+type TransferResult = CopyResult & { requestId: string };
 
 const english = {
   actions: 'File actions',
@@ -33,15 +40,20 @@ const english = {
   rename: 'Rename',
   copyToFolder: 'Copy to folder',
   moveToFolder: 'Move to folder…',
+  replaceFile: 'Replace existing file…',
+  replace: 'Replace',
+  review: 'Review',
+  targetFile: 'Path to the file to replace',
+  confirmReplace: 'Replace the contents of this file?',
+  stagedFile: 'File retained in',
   create: 'Create',
   copy: 'Copy',
   move: 'Move',
   destination: 'Destination folder',
   copiedTo: 'Copied to',
-  movedTo: 'Moved to',
-  movedAs: 'Moved under a different name to',
-  alreadyThere: 'Already at',
-  cleanupPending: 'The file was copied. Temporary file cleanup is pending.',
+  cleanupPending: 'The copy finished. Temporary file cleanup is pending.',
+  verifyCopy: 'Retry verification',
+  verifyCopyPending: 'The copy needs verification. Retrying checks the existing data.',
   close: 'Close',
   working: 'Working…',
   stop: 'Stop copy',
@@ -69,15 +81,20 @@ const italian: typeof english = {
   rename: 'Rinomina',
   copyToFolder: 'Copia in cartella',
   moveToFolder: 'Sposta in cartella…',
+  replaceFile: 'Sostituisci file esistente…',
+  replace: 'Sostituisci',
+  review: 'Verifica',
+  targetFile: 'Percorso del file da sostituire',
+  confirmReplace: 'Sostituire il contenuto di questo file?',
+  stagedFile: 'File conservato in',
   create: 'Crea',
   copy: 'Copia',
   move: 'Sposta',
   destination: 'Cartella di destinazione',
   copiedTo: 'Copiato in',
-  movedTo: 'Spostato in',
-  movedAs: 'Spostato con un altro nome in',
-  alreadyThere: 'Già presente in',
-  cleanupPending: 'Il file è stato copiato. La pulizia dei file temporanei è in sospeso.',
+  cleanupPending: 'La copia è terminata. La pulizia dei file temporanei è in sospeso.',
+  verifyCopy: 'Riprova verifica',
+  verifyCopyPending: 'La copia richiede una verifica. Il nuovo tentativo controlla i dati già presenti.',
   close: 'Chiudi',
   working: 'Operazione in corso…',
   stop: 'Interrompi copia',
@@ -97,15 +114,20 @@ const italian: typeof english = {
   },
 };
 
-type ErrorCode = keyof typeof english.errors;
+export type FileErrorCode = keyof typeof english.errors;
 
-function errorCode(error: unknown): ErrorCode {
-  return typeof error === 'string' && Object.hasOwn(english.errors, error) ? error as ErrorCode : 'unavailable';
+export function fileActionLabels() {
+  return locale === 'it' ? italian : english;
 }
 
-export function FileMutationControls({ directory, selected, onChanged, context, dismissContext, selectAll, openFolder, openTab, openWindow }: {
+export function fileErrorCode(error: unknown): FileErrorCode {
+  return typeof error === 'string' && Object.hasOwn(english.errors, error) ? error as FileErrorCode : 'unavailable';
+}
+
+export function FileMutationControls({ directory, selected, batchSelection, onChanged, context, dismissContext, selectAll, openFolder, openTab, openWindow }: {
   directory: string | null;
   selected: FileActionSelection | null;
+  batchSelection: FileActionSelection[];
   onChanged: (directory: string) => boolean;
   context: FileActionContext | null;
   dismissContext: () => void;
@@ -114,7 +136,79 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
   openTab: (path: string) => void;
   openWindow: (path: string) => void;
 }) {
-  const labels = locale === 'it' ? italian : english;
+  const labels = fileActionLabels();
+  const isItalian = locale === 'it';
+  const [undoAvailable, setUndoAvailable] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    function refresh() {
+      void invoke<boolean>('file_undo_available').then(value => {
+        if (!disposed) setUndoAvailable(value);
+      }).catch(() => {});
+    }
+    const subscription = listen('file-undo-changed', refresh);
+    void subscription.then(refresh).catch(() => {});
+    return () => {
+      disposed = true;
+      void subscription.then(unlisten => unlisten()).catch(() => {});
+    };
+  }, []);
+
+  async function removeOrUndo(target: string, sources?: string[]) {
+    if (removing) return;
+    dismissContext();
+    if (menu.current) menu.current.open = false;
+    setRemoving(true);
+    try {
+      if (sources) {
+        const { problem } = await invoke<{ problem?: { path: string; error: string; retainedPath?: string } }>('trash_files', { sources });
+        changed.current?.(target);
+        if (problem) window.alert([labels.errors[fileErrorCode(problem.error)], problem.path, problem.retainedPath].filter(Boolean).join('\n'));
+      } else {
+        const result = await invoke<{ directories: string[]; error?: string }>('undo_last_file_action');
+        for (const path of result.directories) changed.current?.(path);
+        if (result.error) window.alert(labels.errors[fileErrorCode(result.error)]);
+      }
+    } catch (error) {
+      window.alert(labels.errors[fileErrorCode(error)]);
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  const [zipBusy, setZipBusy] = useState(false);
+  const [zipPreview, setZipPreview] = useState<{ title: string; entries: { path: string; extractable: boolean }[] } | null>(null);
+
+  async function zipAction(target: string, item: FileActionSelection, action: 'inspect' | 'extract' | 'compress') {
+    if (zipBusy) return;
+    dismissContext();
+    if (menu.current) menu.current.open = false;
+    setZipBusy(true);
+    try {
+      if (action !== 'inspect') {
+        if (action === 'extract') await invoke('extract_zip_here', { source: item.path });
+        else await invoke('compress_entry_zip', { source: item.path, isDirectory: item.kind === 'directory' });
+        changed.current?.(target);
+      } else {
+        const entries = await invoke<{ path: string; extractable: boolean }[]>('inspect_zip', { source: item.path });
+        setZipPreview({ title: item.name, entries });
+      }
+    } catch (error) {
+      const failure = error as { code?: string; path?: string } | null;
+      window.alert([isItalian ? 'Operazione ZIP non riuscita' : 'ZIP operation failed', failure?.code ?? String(error), failure?.path].filter(Boolean).join('\n'));
+    } finally {
+      setZipBusy(false);
+    }
+  }
+
+  function trashAction(target: string, sources: string[]) {
+    if (!/Macintosh|Windows/.test(navigator.userAgent)) return null;
+    return <button type="button" disabled={removing} onClick={() => void removeOrUndo(target, sources)}>
+      <Trash2 aria-hidden="true" /> {isItalian ? 'Sposta nel Cestino' : 'Move to Trash'}
+    </button>;
+  }
   const id = useId();
   const titleId = id + '-title';
   const nameId = id + '-name';
@@ -131,19 +225,20 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
   const [action, setAction] = useState<Action | null>(null);
   const [value, setValue] = useState('');
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
-  const [error, setError] = useState<ErrorCode | null>(null);
+  const [error, setError] = useState<FileErrorCode | null>(null);
+  const [approval, setApproval] = useState<ReplacementApproval | null>(null);
   const [busy, setBusy] = useState(false);
   const [activeCopy, setActiveCopy] = useState<{ id: string; stopping: boolean } | null>(null);
-  const copy = action?.kind === 'copy';
-  const move = action?.kind === 'move';
+  const copy = action?.kind === 'transfer' && action.transfer === 'copy';
+  const move = action?.kind === 'transfer' && action.transfer === 'move';
+  const replace = action?.kind === 'replace';
   const title = action?.kind === 'rename' ? labels.rename
+    : replace ? labels.replaceFile
     : copy ? labels.copyToFolder
     : move ? labels.moveToFolder
     : action?.kind === 'create' && action.isDirectory ? labels.newFolder : labels.newFile;
   const requiresReview = error === 'recovery-pending' || error === 'cleanup-failed';
-  const resultLabel = transferResult?.kind === 'copy' ? labels.copiedTo
-    : transferResult?.disposition === 'kept-both' ? labels.movedAs
-    : transferResult?.disposition === 'already-there' ? labels.alreadyThere : labels.movedTo;
+
 
   useLayoutEffect(() => {
     changed.current = onChanged;
@@ -204,6 +299,7 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
     setValue(initialValue);
     setTransferResult(null);
     setError(null);
+    setApproval(null);
     setAction(next);
   }
 
@@ -217,23 +313,56 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
         onClick={() => target && start({ kind: 'create', directory: target, isDirectory: true }, '', anchor)}>
         <FolderPlus aria-hidden="true" /> {labels.newFolder}
       </button>
+      {target && undoAvailable && <button type="button" disabled={removing} onClick={() => void removeOrUndo(target)}>
+        <Undo2 aria-hidden="true" /> {isItalian ? 'Annulla ultima operazione' : 'Undo last file action'}
+      </button>}
     </>;
   }
 
-  function entryActions(target: string | null, item: FileActionSelection | null, contextual = false, anchor = trigger.current) {
+  function entryActions(target: string | null, item: FileActionSelection | null, anchor = trigger.current) {
     return <>
       <button type="button" disabled={!item || !target}
         onClick={() => target && item && start({ kind: 'rename', directory: target, path: item.path }, item.name, anchor)}>
         <Pencil aria-hidden="true" /> {labels.rename}
       </button>
-      {(!contextual || item?.kind === 'file') && <button type="button" disabled={!target || item?.kind !== 'file'}
-        onClick={() => target && item?.kind === 'file' && start({ kind: 'copy', source: item.path }, target, anchor)}>
-        <Copy aria-hidden="true" /> {labels.copyToFolder}
-      </button>}
       <button type="button" disabled={!target || !item}
-        onClick={() => target && item && start({ kind: 'move', source: item.path, directory: target }, target, anchor)}>
+        onClick={() => target && item && start({ kind: 'transfer', transfer: 'copy', sources: [item.path] }, target, anchor)}>
+        <Copy aria-hidden="true" /> {labels.copyToFolder}
+      </button>
+      <button type="button" disabled={!target || !item}
+        onClick={() => target && item && start({ kind: 'transfer', transfer: 'move', sources: [item.path] }, target, anchor)}>
         <FolderInput aria-hidden="true" /> {labels.moveToFolder}
       </button>
+      {item?.kind === 'file' && navigator.userAgent.includes('Macintosh') && <button type="button" disabled={!target}
+        onClick={() => target && start({ kind: 'replace', source: item.path }, '', anchor)}>
+        <Replace aria-hidden="true" /> {labels.replaceFile}
+      </button>}
+      {target && item && trashAction(target, [item.path])}
+      {target && item && <button type="button" disabled={zipBusy}
+        onClick={() => void zipAction(target, item, 'compress')}>
+        <Archive aria-hidden="true" /> {isItalian ? 'Comprimi in ZIP' : 'Compress to ZIP'}
+      </button>}
+      {target && item?.kind === 'file' && /\.zip$/i.test(item.name) && <>
+        <button type="button" disabled={zipBusy} onClick={() => void zipAction(target, item, 'inspect')}>
+          <Archive aria-hidden="true" /> {isItalian ? 'Mostra contenuto ZIP' : 'View ZIP contents'}
+        </button>
+        <button type="button" disabled={zipBusy} onClick={() => void zipAction(target, item, 'extract')}>
+          <FileArchive aria-hidden="true" /> {isItalian ? 'Estrai qui' : 'Extract here'}
+        </button>
+      </>}
+    </>;
+  }
+
+  function batchActions(target: string, items: FileActionSelection[], anchor = trigger.current) {
+    const sources = items.map(item => item.path);
+    return <>
+      <button type="button" onClick={() => start({ kind: 'transfer', transfer: 'copy', sources }, target, anchor)}>
+        <Copy aria-hidden="true" /> {labels.copyToFolder}
+      </button>
+      <button type="button" onClick={() => start({ kind: 'transfer', transfer: 'move', sources }, target, anchor)}>
+        <FolderInput aria-hidden="true" /> {labels.moveToFolder}
+      </button>
+      {trashAction(target, sources)}
     </>;
   }
 
@@ -246,31 +375,21 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!action || !value || busy || requiresReview || transferResult) return;
-    const destination = action.kind === 'copy' || action.kind === 'move' ? value : action.directory;
+    const destination = 'directory' in action ? action.directory : value;
     setBusy(true);
     setError(null);
     try {
-      if (action.kind === 'copy') {
-        const requestId = crypto.randomUUID();
-        setActiveCopy({ id: requestId, stopping: false });
-        const result = await invoke<CopyResult>('copy_regular_file', {
-          request: { source: action.source, directory: destination, requestId },
-        });
-        const refreshed = changed.current?.(parentPath(result.path) ?? destination);
-        if (!refreshed || result.cleanupPending) {
-          setTransferResult({ kind: 'copy', ...result });
+      if (action.kind === 'transfer') {
+        await invoke('start_transfer', { request: { kind: action.transfer, sources: action.sources, directory: destination } });
+      } else if (action.kind === 'replace') {
+        if (!approval) {
+          setApproval(await invoke<ReplacementApproval>('prepare_file_replacement', { path: destination }));
           return;
         }
-      } else if (action.kind === 'move') {
-        const path = await invoke<string>('move_file_or_directory', {
-          request: { source: action.source, directory: destination },
-        });
-        if (!changed.current?.(action.directory)) {
-          changed.current?.(parentPath(path) ?? destination);
-        }
-        const disposition = path === action.source ? 'already-there'
-          : pathLabel(path).normalize() === pathLabel(action.source).normalize() ? 'moved' : 'kept-both';
-        setTransferResult({ kind: 'move', path, disposition });
+        setActiveCopy({ id: approval.requestId, stopping: false });
+        const result = await invoke<CopyResult>('replace_regular_file', { source: action.source, requestId: approval.requestId });
+        changed.current?.(parentPath(result.path) ?? destination);
+        setTransferResult({ requestId: approval.requestId, ...result });
         return;
       } else {
         const request: Request = action.kind === 'rename'
@@ -280,12 +399,11 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
         changed.current?.(destination);
       }
     } catch (error) {
-      const code = errorCode(error);
+      const code = fileErrorCode(error);
       setError(code);
+      if (action.kind === 'replace') setApproval(null);
       if (code === 'recovery-pending' || code === 'cleanup-failed') {
-        if (action.kind !== 'move' || !changed.current?.(action.directory)) {
-          changed.current?.(destination);
-        }
+        changed.current?.(action.kind === 'replace' ? parentPath(destination) ?? destination : destination);
       }
       return;
     } finally {
@@ -302,6 +420,21 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
     const accepted = await invoke<boolean>('stop_copy', { requestId: id }).catch(() => false);
     if (!accepted) {
       setActiveCopy(current => current?.id === id ? { id, stopping: false } : current);
+    }
+  }
+
+  async function retryCopy() {
+    if (!transferResult?.recoveryPending || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await invoke<CopyResult>('recover_copy_transfer', { requestId: transferResult.requestId });
+      setTransferResult({ requestId: transferResult.requestId, ...result });
+      changed.current?.(parentPath(result.path) ?? result.path);
+    } catch (error) {
+      setError(fileErrorCode(error));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -324,11 +457,10 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
         </summary>
         <div className="file-mutation-actions">
           {createActions(directory)}
-          {entryActions(directory, selected)}
+          {directory && batchSelection.length > 1 ? batchActions(directory, batchSelection) : entryActions(directory, selected)}
         </div>
       </details>
-      {context && <div ref={contextActions} className="file-mutation-actions file-context-actions"
-        role="group" aria-label={labels.actions} onContextMenu={event => event.preventDefault()}
+      {context && <WorkspaceContextMenu ref={contextActions} aria-label={labels.actions}
         onKeyDown={event => {
           if (event.key === 'Escape') {
             event.preventDefault();
@@ -343,7 +475,7 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
             buttons[(index + step + buttons.length) % buttons.length]?.focus();
           }
         }}>
-        {!context.selection ? <>
+        {context.sources ? batchActions(context.directory, context.sources, context.anchor) : !context.selection ? <>
           {createActions(context.directory, context.anchor)}
           {context.directory === directory &&
             <button type="button" onClick={() => { dismissContext(); focusBack(context.anchor); selectAll(); }}><ListChecks aria-hidden="true" /> {labels.selectAll}</button>}
@@ -353,9 +485,19 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
             <button type="button" onClick={() => browseFromContext(context.selection!.path, openTab)}><PanelTop aria-hidden="true" /> {strings.newTab}</button>
             <button type="button" onClick={() => browseFromContext(context.selection!.path, openWindow)}><SquareArrowOutUpRight aria-hidden="true" /> {strings.newWindow}</button>
           </>}
-          {entryActions(context.directory, context.selection, true, context.anchor)}
+          {entryActions(context.directory, context.selection, context.anchor)}
         </>}
-      </div>}
+      </WorkspaceContextMenu>}
+      {zipBusy && <p role="status">{labels.working}</p>}
+      {zipPreview && <dialog ref={node => { if (node && !node.open) node.showModal(); }}
+        aria-label={zipPreview.title} onClose={() => setZipPreview(null)}>
+        <h2>{zipPreview.title}</h2>
+        <ul style={{ maxHeight: '50vh', overflow: 'auto', overflowWrap: 'anywhere' }}>
+          {zipPreview.entries.map(entry => <li key={entry.path}>{entry.path}{!entry.extractable &&
+            (isItalian ? ' (non estraibile)' : ' (not extractable)')}</li>)}
+        </ul>
+        <form method="dialog"><button>{isItalian ? 'Chiudi' : 'Close'}</button></form>
+      </dialog>}
       <dialog ref={dialog} className="file-mutation-dialog" aria-labelledby={titleId}
         onCancel={event => { if (busy) event.preventDefault(); }}
         onClose={() => {
@@ -366,20 +508,30 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
           <h2 id={titleId}>{title}</h2>
           {transferResult ? (
             <>
-              <p role="status">{resultLabel} <strong>{transferResult.path}</strong></p>
-              {transferResult.kind === 'copy' && transferResult.cleanupPending && <p role="status">{labels.cleanupPending}</p>}
+              <p role="status">
+                {transferResult.recoveryPending ? labels.verifyCopyPending : labels.copiedTo}
+                {' '}<strong>{transferResult.path}</strong>
+              </p>
+              {transferResult.cleanupPending && <p role="status">{labels.cleanupPending}</p>}
+              {transferResult.stagingPath &&
+                <p>{labels.stagedFile} <strong>{transferResult.stagingPath}</strong></p>}
+              {error && <p role="alert">{labels.errors[error]}</p>}
               <div className="file-mutation-buttons">
-                <button ref={closeResult} type="button" onClick={() => dialog.current?.close()}>{labels.close}</button>
+                {transferResult.recoveryPending &&
+                  <button type="button" disabled={busy} onClick={retryCopy}>{labels.verifyCopy}</button>}
+                <button ref={closeResult} type="button" disabled={busy} onClick={() => dialog.current?.close()}>{labels.close}</button>
               </div>
             </>
           ) : (
             <>
-              <label htmlFor={nameId}>{copy || move ? labels.destination : strings.name}</label>
+              {approval ? <p>{labels.confirmReplace} <strong>{approval.path}</strong></p> : <>
+              <label htmlFor={nameId}>{replace ? labels.targetFile : copy || move ? labels.destination : strings.name}</label>
               <input ref={input} id={nameId} value={value} required autoFocus
                 autoComplete="off" spellCheck={false} readOnly={busy || requiresReview}
                 aria-invalid={error === 'invalid-request' || error === 'already-exists' || undefined}
                 aria-describedby={error ? errorId : undefined}
                 onChange={event => { setValue(event.target.value); setError(null); }} />
+              </>}
               {error && <p id={errorId} role="alert">
                 {(copy || move) && error === 'invalid-request' ? strings.errors[error] : labels.errors[error]}
               </p>}
@@ -389,7 +541,8 @@ export function FileMutationControls({ directory, selected, onChanged, context, 
                   ? <button type="button" disabled={activeCopy.stopping} onClick={stopCopy}>{labels.stop}</button>
                   : <button type="button" disabled={busy} onClick={() => dialog.current?.close()}>{strings.cancel}</button>}
                 <button type="submit" disabled={!value || busy || requiresReview}>
-                  {action?.kind === 'rename' ? labels.rename : copy ? labels.copy : move ? labels.move : labels.create}
+                  {action?.kind === 'rename' ? labels.rename : copy ? labels.copy : move ? labels.move
+                    : replace ? approval ? labels.replace : labels.review : labels.create}
                 </button>
               </div>
             </>

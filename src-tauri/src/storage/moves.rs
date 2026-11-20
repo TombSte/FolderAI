@@ -103,7 +103,7 @@ impl Store {
             let changed = transaction.execute(
                 "UPDATE operation_items SET state='failed'
                  WHERE operation_id=?1 AND item_id=?2 AND source_identity=?3
-                 AND kind='move' AND state='planned'",
+                 AND kind='move' AND cross_move_nonce IS NULL AND state='planned'",
                 params![operation_id, tracked.id, tracked.key],
             )?;
             if changed != 1 {
@@ -180,7 +180,7 @@ impl Store {
         let record = transaction
             .query_row(
                 "SELECT item_id, source, destination, source_identity, state FROM operation_items
-             WHERE operation_id=?1 AND item_key=?2 AND kind='move'",
+             WHERE operation_id=?1 AND item_key=?2 AND kind='move' AND cross_move_nonce IS NULL",
                 params![key.operation_id, key.item_key],
                 |row| {
                     Ok(MoveRecord {

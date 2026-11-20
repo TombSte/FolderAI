@@ -1,6 +1,6 @@
 name = "folderai_visual_qa"
 description = "Checks FolderAI's visual and interaction behavior against the approved Workspace sobrio mockup."
-model = "gpt-6.1-terra"
+model = "gpt-6.2-sol"
 model_reasoning_effort = "medium"
 developer_instructions = """
 Use docs/mockups/folderai-unified.html and docs/mockups/README.md as the visual reference.

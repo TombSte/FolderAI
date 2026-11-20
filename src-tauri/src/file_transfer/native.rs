@@ -1,8 +1,9 @@
 use std::{
     ffi::{OsStr, OsString},
-    fs::File,
+    fs::{File, FileTimes},
     io,
     path::{Component, Path, PathBuf},
+    time::SystemTime,
 };
 
 /// A live directory and the original address the user chose for it. Effects
@@ -50,6 +51,24 @@ impl Directory {
         self.file.try_clone()
     }
 
+    pub(super) fn duplicate(&self) -> io::Result<Self> {
+        Ok(Self::capture(self.try_clone_file()?, self.path.clone()))
+    }
+
+    pub(super) fn relocate(&self, path: PathBuf) -> io::Result<Self> {
+        let directory = Self::capture(self.try_clone_file()?, path);
+        directory.verify()?;
+        Ok(directory)
+    }
+
+    pub(super) fn same_volume(&self, other: &Self) -> io::Result<bool> {
+        platform::same_volume(&self.file, &other.file)
+    }
+
+    pub(super) fn set_modified(&self, modified: SystemTime) -> io::Result<()> {
+        platform::set_modified(&self.file, &self.path, modified)
+    }
+
     pub(super) fn verify(&self) -> io::Result<()> {
         let current = platform::open_directory(self.path())?;
         if platform::same_directory(&self.file, &current)? {
@@ -77,6 +96,13 @@ impl Directory {
 
     pub(super) fn create_directory(&self, name: &OsStr) -> io::Result<()> {
         platform::create_directory(&self.file, name)
+    }
+
+    /// The inner result reports failure to witness a directory after mkdir.
+    /// The caller must preserve the entry in that case.
+    pub(super) fn create_staging_directory(&self, name: &OsStr) -> io::Result<io::Result<Self>> {
+        platform::create_staging_directory(&self.file, name)
+            .map(|opened| opened.map(|file| Self::capture(file, self.path.join(name))))
     }
 
     /// Resolve entries against the captured object, including when its
@@ -173,6 +199,14 @@ mod platform {
         let left = left.metadata()?;
         let right = right.metadata()?;
         Ok(left.dev() == right.dev() && left.ino() == right.ino())
+    }
+
+    pub(super) fn same_volume(left: &File, right: &File) -> io::Result<bool> {
+        Ok(left.metadata()?.dev() == right.metadata()?.dev())
+    }
+
+    pub(super) fn set_modified(file: &File, _: &Path, modified: SystemTime) -> io::Result<()> {
+        file.set_times(FileTimes::new().set_modified(modified))
     }
 
     fn open_relative(parent: &File, name: &OsStr, flags: i32) -> io::Result<File> {
@@ -316,6 +350,41 @@ mod platform {
         check(result)
     }
 
+    pub(super) fn create_staging_directory(
+        parent: &File,
+        name: &OsStr,
+    ) -> io::Result<io::Result<File>> {
+        create_directory(parent, name)?;
+        let witnessed = (|| {
+            let name = leaf(name)?;
+            let mut observed = std::mem::MaybeUninit::<libc::stat>::uninit();
+            // Take a no-follow snapshot from the anchored parent before opening.
+            check(unsafe {
+                libc::fstatat(
+                    parent.as_raw_fd(),
+                    name.as_ptr(),
+                    observed.as_mut_ptr(),
+                    libc::AT_SYMLINK_NOFOLLOW,
+                )
+            })?;
+            let observed = unsafe { observed.assume_init() };
+            let file = open_at(parent, &name, DIRECTORY_OPEN)?;
+            let metadata = file.metadata()?;
+            // Darwin has no mkdir-and-open operation. Refuse an observable
+            // substitution and never clean up by name if acquisition failed.
+            if metadata.dev() != observed.st_dev as u64
+                || metadata.ino() != observed.st_ino
+                || metadata.uid() != unsafe { libc::geteuid() }
+                || metadata.mode() & 0o777 != 0o700
+                || !entries(&file)?.is_empty()
+            {
+                return Err(io::Error::other("could not witness new staging directory"));
+            }
+            Ok(file)
+        })();
+        Ok(witnessed)
+    }
+
     pub(super) fn publish(
         source: &File,
         name: &OsStr,
@@ -394,8 +463,9 @@ mod platform {
         FILE_DISPOSITION_FLAG_POSIX_SEMANTICS, FILE_DISPOSITION_INFO_EX,
         FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ,
         FILE_GENERIC_WRITE, FILE_ID_INFO, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
-        FILE_SHARE_WRITE, FILE_TRAVERSE, FileAttributeTagInfo, FileDispositionInfoEx, FileIdInfo,
-        FileRenameInfo, GetFileInformationByHandleEx, SYNCHRONIZE, SetFileInformationByHandle,
+        FILE_SHARE_WRITE, FILE_TRAVERSE, FILE_WRITE_ATTRIBUTES, FileAttributeTagInfo,
+        FileDispositionInfoEx, FileIdInfo, FileRenameInfo, GetFileInformationByHandleEx,
+        SYNCHRONIZE, SetFileInformationByHandle,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         FILE_ATTRIBUTE_DEVICE, FILE_ID_BOTH_DIR_INFO, FILE_LIST_DIRECTORY, FileIdBothDirectoryInfo,
@@ -526,6 +596,26 @@ mod platform {
         let right: FILE_ID_INFO = value(right, FileIdInfo)?;
         Ok(left.VolumeSerialNumber == right.VolumeSerialNumber
             && left.FileId.Identifier == right.FileId.Identifier)
+    }
+
+    pub(super) fn same_volume(left: &File, right: &File) -> io::Result<bool> {
+        let left: FILE_ID_INFO = value(left, FileIdInfo)?;
+        let right: FILE_ID_INFO = value(right, FileIdInfo)?;
+        Ok(left.VolumeSerialNumber == right.VolumeSerialNumber)
+    }
+
+    pub(super) fn set_modified(file: &File, path: &Path, modified: SystemTime) -> io::Result<()> {
+        let writable = require_directory(
+            OpenOptions::new()
+                .access_mode(FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES)
+                .share_mode(SHARED)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+                .open(path)?,
+        )?;
+        if !same_directory(file, &writable)? {
+            return Err(io::Error::from(io::ErrorKind::NotFound));
+        }
+        writable.set_times(FileTimes::new().set_modified(modified))
     }
 
     fn open_relative(
@@ -713,6 +803,20 @@ mod platform {
             FILE_DIRECTORY_FILE,
         )?;
         Ok(())
+    }
+
+    pub(super) fn create_staging_directory(
+        parent: &File,
+        name: &OsStr,
+    ) -> io::Result<io::Result<File>> {
+        open_relative(
+            parent,
+            name,
+            DIRECTORY_ACCESS,
+            FILE_CREATE,
+            FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT,
+        )
+        .map(Ok)
     }
 
     #[repr(C)]

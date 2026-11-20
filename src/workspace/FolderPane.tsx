@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import {
   ArrowDown,
   ArrowLeft,
@@ -30,8 +31,8 @@ import {
 } from 'react';
 import type { Directory } from '../ipc';
 import { ColumnPreview } from './ColumnPreview';
-import { FileMutationControls, type FileActionContext, type FileActionSelection } from './FileMutationControls';
-import { defaultView, displayName, loadWorkspaceViews, saveWorkspaceView, sortEntries, type ColumnId, type ViewOptions as Options } from './fileViews';
+import { fileActionLabels, fileErrorCode, FileMutationControls, type FileActionContext, type FileActionSelection } from './FileMutationControls';
+import { defaultView, displayName, fileExtension, loadWorkspaceViews, saveWorkspaceView, sortEntries, sortIds, type ColumnId, type ViewOptions as Options } from './fileViews';
 import { ViewOptions, getViewStrings } from './ViewOptions';
 import { defaultControls, shortcutFromEvent, type Controls } from './controls';
 import { useWorkspaceNavigation, type Destination } from './navigation';
@@ -100,13 +101,18 @@ type PaneProps = {
   tagFilter: string | null;
   tags: Tag[];
   metadataVersion: number;
+  fileChanges: ReadonlyMap<string, number>;
+  activityControl: import('react').ReactNode;
   clearFilter: () => void;
   openTab: (path: string) => void;
   openWindow: (path: string) => void;
   shortcuts?: Controls['shortcuts'];
 };
 
-export default function FolderPane({ tab, panelId, panelIndex, focused, visible, onFocus, onUpdate, onSelection, tagFilter, tags, metadataVersion, clearFilter, openTab, openWindow, shortcuts = defaultControls.shortcuts }: PaneProps) {
+const workspaceFileDrag = 'application/x-folderai-entry';
+let draggedEntry: FileActionSelection | null = null;
+
+export default function FolderPane({ tab, panelId, panelIndex, focused, visible, onFocus, onUpdate, onSelection, tagFilter, tags, metadataVersion, fileChanges, activityControl, clearFilter, openTab, openWindow, shortcuts = defaultControls.shortcuts }: PaneProps) {
   const viewStrings = getViewStrings();
   const collator = useMemo(() => new Intl.Collator(locale, { numeric: true, sensitivity: 'base' }), [locale]);
   const { navigation, open, cancelAddress, usedFallback } = useWorkspaceNavigation(panelId, tab.id, tab.start, tab.fallback, tab.selected);
@@ -136,6 +142,14 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
   const rowButtons = useRef(new Map<string, HTMLButtonElement>());
 
   const folderPath = directory?.location.path ?? null;
+  const observedChanges = useRef(new Map<string, number>());
+  useEffect(() => {
+    if (!folderPath || !visible || pending) return;
+    const version = fileChanges.get(folderPath) ?? 0;
+    if (version === (observedChanges.current.get(folderPath) ?? 0)) return;
+    observedChanges.current.set(folderPath, version);
+    navigate({ target: { kind: 'path', path: folderPath }, source: 'refresh' });
+  });
   useLayoutEffect(dismissContext, [dismissContext, folderPath, focused, visible, pending]);
   const option = view.path === folderPath ? view.options : defaultView;
   const sorted = useMemo(() => sortEntries(directory?.entries ?? [], option, collator), [directory, option, collator]);
@@ -454,12 +468,13 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
     );
   }
 
-  function showContext(event: MouseEvent | KeyboardEvent, selection: FileActionSelection | null, anchor: HTMLElement | null, target = folderPath) {
+  function showContext(event: MouseEvent | KeyboardEvent, selection: FileActionSelection | null, anchor: HTMLElement | null, target = folderPath, sources?: FileActionSelection[]) {
     if (!target || pending || document.querySelector('dialog[open]')) return;
     const bounds = anchor?.getBoundingClientRect();
     setFileContext({
       directory: target,
       selection,
+      sources,
       anchor,
       x: 'clientX' in event ? event.clientX : (bounds?.left ?? 0) + 8,
       y: 'clientY' in event ? event.clientY : (bounds?.bottom ?? 0),
@@ -473,7 +488,9 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
     const included = selection.has(key);
     if (!included) selectRow(entry, entryIndex);
     const item = fileActionSelection(entry);
-    if (item && (!included || selectedRows.length === 1)) showContext(event, item, rowButtons.current.get(key) ?? null);
+    const anchor = rowButtons.current.get(key) ?? null;
+    if (included && batchSelection.length > 1) showContext(event, null, anchor, folderPath, batchSelection);
+    else if (item && (!included || selectedRows.length === 1)) showContext(event, item, anchor);
     else dismissContext();
   }
 
@@ -533,7 +550,7 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
   function renderCell(entry: Entry, index: number, column: ColumnId) {
     switch (column) {
       case 'name': return rowName(entry, index);
-      case 'kind': return entry.kind === 'directory' ? strings.folder : strings[entry.kind];
+      case 'kind': return entry.kind === 'directory' ? strings.folder : fileExtension(entry).toUpperCase() || strings[entry.kind];
       case 'size': return readableSize(entry.size);
       case 'modified': return readableDate(entry.modifiedMs);
       case 'created': return readableDate(entry.createdMs ?? null);
@@ -550,7 +567,67 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
   const visibleColumns = option.columns.filter(column => column.visible);
   const preview = entries.find((entry, index) => entryKey(entry, index) === selected && entry.kind === 'directory');
   const selectedEntries = entries.filter((entry, index) => selection.has(entryKey(entry, index)));
+  function dragEntry(entry: Entry): React.HTMLAttributes<HTMLElement> {
+    const item = fileActionSelection(entry);
+    if (!item || pending) return {};
+    const target = item.path;
+    function accepts(event: React.DragEvent<HTMLElement>) {
+      if (item?.kind !== 'directory' || !draggedEntry || !event.dataTransfer.types.includes(workspaceFileDrag)) return false;
+      for (let ancestor: string | null = target; ancestor;) {
+        if (ancestor === draggedEntry.path) return false;
+        const parent = parentPath(ancestor);
+        if (parent === ancestor) break;
+        ancestor = parent;
+      }
+      return parentPath(draggedEntry.path) !== target;
+    }
+    function clearHighlight(event: React.DragEvent<HTMLElement>) {
+      delete event.currentTarget.dataset.fileDropTarget;
+    }
+    return {
+      draggable: true,
+      onDragStart(event) {
+        draggedEntry = item;
+        event.dataTransfer.setData(workspaceFileDrag, 'move');
+        event.dataTransfer.effectAllowed = 'move';
+        const ghost = document.createElement('div');
+        ghost.className = 'file-drag-ghost';
+        const icon = document.createElement('span');
+        icon.textContent = item.kind === 'directory' ? '📁' : '📄';
+        ghost.append(icon, document.createTextNode(item.name));
+        document.body.append(ghost);
+        event.dataTransfer.setDragImage(ghost, 16, 16);
+        window.setTimeout(() => ghost.remove(), 0);
+      },
+      onDragEnd() {
+        draggedEntry = null;
+        document.querySelectorAll('[data-file-drop-target]').forEach(node => node.removeAttribute('data-file-drop-target'));
+      },
+      onDragOver(event) {
+        if (!accepts(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        event.currentTarget.dataset.fileDropTarget = 'true';
+      },
+      onDragLeave(event) {
+        if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) clearHighlight(event);
+      },
+      onDrop(event) {
+        clearHighlight(event);
+        if (!accepts(event) || !draggedEntry) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const source = draggedEntry.path;
+        draggedEntry = null;
+        void invoke('start_transfer', { request: { kind: 'move', sources: [source], directory: item.path } })
+          .catch(error => window.alert(fileActionLabels().errors[fileErrorCode(error)]));
+      },
+    };
+  }
+
   const mutationSelection = selectedEntries.length === 1 ? fileActionSelection(selectedEntries[0]) : null;
+  const selectedActions = selectedEntries.map(fileActionSelection);
+  const batchSelection = selectedActions.every(item => item !== null) ? selectedActions : [];
 
   return (
         <section id={`pane-${tab.id}`} className="workspace-main" hidden={!visible} data-panel-index={panelIndex}
@@ -619,6 +696,7 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
             <ViewOptions value={option} onChange={updateOptions} hasFolder={!!folderPath}
               saveDefault={() => updateOptions(option, null)} reset={resetOptions} />
             <FileMutationControls directory={!pending ? folderPath : null} selected={mutationSelection}
+              batchSelection={batchSelection}
               context={fileContext} dismissContext={dismissContext} selectAll={() => setSelectedRows(entries.map(entryKey))}
               openFolder={goTo} openTab={openTab} openWindow={openWindow}
               onChanged={path => {
@@ -678,8 +756,16 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
                   <thead>
                     <tr>{visibleColumns.map(column => <th key={column.id} scope="col"
                       aria-sort={option.sort === column.id ? option.descending ? 'descending' : 'ascending' : undefined}>
-                      {viewStrings[column.id]} {option.sort === column.id && (option.descending
-                        ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />)}
+                      {(() => {
+                        const sort = sortIds.find(id => id === column.id);
+                        if (!sort) return viewStrings[column.id];
+                        const active = option.sort === sort;
+                        return <button type="button" className="file-sort-button"
+                          onClick={() => updateOptions({ ...option, sort, descending: active && !option.descending })}>
+                          {viewStrings[column.id]} {active && (option.descending
+                            ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />)}
+                        </button>;
+                      })()}
                     </th>)}</tr>
                   </thead>
                   <tbody>
@@ -690,7 +776,7 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
                         {group && <tr className="file-group-row"><th colSpan={visibleColumns.length} scope="rowgroup">
                           {entry.kind === 'directory' ? strings.folder : strings[entry.kind]}
                         </th></tr>}
-                        <tr data-file-key={key} data-selected={selection.has(key)}
+                        <tr {...dragEntry(entry)} data-file-key={key} data-selected={selection.has(key)}
                           onClick={event => selectRow(entry, entryIndex, event)} onDoubleClick={() => openRow(entry)}
                           onContextMenu={event => openItemContext(event, entry, entryIndex)}>
                           {visibleColumns.map(column => <td key={column.id}>{renderCell(entry, entryIndex, column.id)}</td>)}
@@ -710,7 +796,7 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
                     const group = option.groupBy === 'kind' && entries[index - 1]?.kind !== entry.kind;
                     return <Fragment key={key}>
                       {group && <div className="file-group-label">{entry.kind === 'directory' ? strings.folder : strings[entry.kind]}</div>}
-                      <div className="file-tile" data-file-key={key} data-selected={selection.has(key)}
+                      <div {...dragEntry(entry)} className="file-tile" data-file-key={key} data-selected={selection.has(key)}
                         onClick={event => selectRow(entry, index, event)} onDoubleClick={() => openRow(entry)}
                         onContextMenu={event => openItemContext(event, entry, index)}>
                         {rowName(entry, index)}
@@ -737,6 +823,7 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
                 ? selectedEntries.reduce((total, entry) => total + (entry.size ?? 0), 0) : null)}
             </span>}
             <span className="local-status"><Shield aria-hidden="true" />{strings.local}</span>
+            {activityControl}
           </footer>
         </section>
   );

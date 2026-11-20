@@ -1,5 +1,6 @@
 import { AppWindow, Columns2, Folder, House, Layers, PanelLeft, PanelRight, Plus, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import FolderPane from './FolderPane';
 import { parentPath, pathLabel } from './paths';
@@ -13,6 +14,7 @@ import { applyLocale, strings } from './strings';
 import { Favorites, Inspector, Tags } from './OrganizationPanel';
 import { loadOrganization, organizationStrings, updateOrganization, type Favorite, type Organization, type OrganizationChange, type OrganizedItem, type SelectionDetails, type Tag } from './organization';
 import { useNoteDrafts } from './useNoteDrafts';
+import { ActivityToggle, WindowActivity, activityLabels, useTransferActivities } from './WindowActivity';
 import './workspace.scss';
 
 const noTags: Tag[] = [];
@@ -62,6 +64,11 @@ export default function Workspace() {
   const t = organizationStrings();
   const inspectorToggle = useRef<HTMLButtonElement>(null);
   const unsavedDialog = useRef<HTMLDialogElement>(null);
+  const transfersDialog = useRef<HTMLDialogElement>(null);
+  const activityReturn = useRef<HTMLButtonElement | null>(null);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const { transfers, fileChanges } = useTransferActivities();
+  const activity = activityLabels();
   const closing = useRef(false);
   const nativeClose = useRef<() => void>(() => {});
   const [retryingClose, setRetryingClose] = useState(false);
@@ -190,11 +197,18 @@ export default function Workspace() {
     return () => clearTimeout(timer);
   }, [layout, persist]);
 
-  async function requestClose(retry = false, discard = false) {
+  async function requestClose(retry = false, discard = false, stopTransfers = false) {
     if (closing.current || !layout) return;
     closing.current = true;
     setRetryingClose(true);
     try {
+      if (stopTransfers) {
+        await invoke('stop_window_transfers');
+        transfersDialog.current?.close();
+      } else if (await invoke<boolean>('has_window_transfers')) {
+        if (!transfersDialog.current?.open) transfersDialog.current?.showModal();
+        return;
+      }
       if (discard || await notes.flush(retry)) {
         await persist(layout);
         await closeWorkspaceWindow();
@@ -207,6 +221,11 @@ export default function Workspace() {
       closing.current = false;
       setRetryingClose(false);
     }
+  }
+
+  function closeActivity() {
+    setActivityOpen(false);
+    activityReturn.current?.focus();
   }
 
   useEffect(() => { nativeClose.current = () => void requestClose(); });
@@ -517,7 +536,13 @@ export default function Workspace() {
               onFocus={() => setLayout(current => current && current.active !== panel.id ? { ...current, active: panel.id } : current)}
               onUpdate={update} onSelection={receiveSelection} tagFilter={filteredTag} tags={organization?.tags ?? noTags}
               clearFilter={() => setTagFilter(null)}
-              metadataVersion={metadataVersion} openTab={path => newWorkspaceTab(path, panel)} openWindow={openWindow} shortcuts={controls.shortcuts} />))}
+              metadataVersion={metadataVersion} fileChanges={fileChanges}
+              activityControl={panel.id === layout.active && tab.id === panel.active ? <ActivityToggle
+                transfers={transfers} open={activityOpen} toggle={event => {
+                  activityReturn.current = event.currentTarget;
+                  setActivityOpen(value => !value);
+                }} /> : null}
+              openTab={path => newWorkspaceTab(path, panel)} openWindow={openWindow} shortcuts={controls.shortcuts} />))}
         </main>
         {inspector && organization && <>
           <div className="sidebar-resize inspector-resize" role="separator" aria-orientation="vertical" aria-label={t.resize}
@@ -545,6 +570,18 @@ export default function Workspace() {
       <WorkspaceSettings dialog={settingsDialog} startup={startup} saveStartup={saveStartupSettings}
         controls={controls} apply={applyControls} error={error || organizationError} copyMetadata={organization?.copyMetadata}
         setCopyMetadata={enabled => void mutateOrganization({ kind: 'set-copy-metadata', enabled })} />
+      {activityOpen && <WindowActivity transfers={transfers} close={closeActivity} />}
+      <dialog ref={transfersDialog} className="organization-dialog" aria-label={activity.closeQuestion}
+        onCancel={event => { if (retryingClose) event.preventDefault(); }}>
+        <p>{activity.closeQuestion}</p>
+        <div className="organization-row organization-form">
+          <button type="button" autoFocus disabled={retryingClose}
+            onClick={() => transfersDialog.current?.close()}>{activity.stay}</button>
+          <button type="button" disabled={retryingClose}
+            onClick={() => void requestClose(false, false, true)}>{activity.stopAndClose}</button>
+        </div>
+        {retryingClose && <p role="status">{activity.phase.stopping}</p>}
+      </dialog>
       <dialog ref={unsavedDialog} className="organization-dialog" aria-label={t.pendingNotes}>
         <p>{t.pendingNotes}</p>
         <div className="organization-row organization-form">

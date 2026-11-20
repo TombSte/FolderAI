@@ -15,6 +15,12 @@ mod copies;
 #[cfg(any(target_os = "macos", windows))]
 pub use copies::{CopyIntent, CopyKey, CopyPublication, CopyRecovery};
 #[cfg(any(target_os = "macos", windows))]
+mod cross_moves;
+#[cfg(any(target_os = "macos", windows))]
+pub use cross_moves::{
+    CrossMoveIntent, CrossMovePublication, CrossMoveRecovery, CrossMoveRemoval, CrossMoveSource,
+};
+#[cfg(any(target_os = "macos", windows))]
 mod moves;
 #[cfg(any(target_os = "macos", windows))]
 pub use moves::{MoveKey, MoveRecovery};
@@ -26,11 +32,12 @@ pub use reference_monitor::{ReconciledReference, ReferenceMonitor};
 const APPLICATION_ID: i64 = 0x4641_4953;
 pub(crate) const FOLDER_VIEW_PREFIX: &str = "workspace.views.folder.v1:";
 pub(crate) const COPY_METADATA_KEY: &str = "organization.copy-metadata.v1";
-const MIGRATIONS: &[&str] = &[
+pub(crate) const MIGRATIONS: &[&str] = &[
     include_str!("schema/001.sql"),
     include_str!("schema/002.sql"),
     include_str!("schema/003.sql"),
     include_str!("schema/004.sql"),
+    include_str!("schema/005.sql"),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,6 +168,17 @@ impl TrackedReference {
         Ok(())
     }
 
+    pub(crate) fn current_observation(
+        &self,
+    ) -> Result<crate::local_identity::LiveObservation, StorageError> {
+        Ok(self.identity.observe()?)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn arm_removal(&self) -> Result<(), StorageError> {
+        Ok(self.identity.arm_directory_removal()?)
+    }
+
     pub(crate) fn matches_open_identity(
         &self,
         identity: &crate::local_identity::LiveIdentity,
@@ -213,7 +231,8 @@ impl Store {
             "SELECT EXISTS (
                 SELECT 1 FROM operation_items WHERE destination=?1
                  AND ((kind='copy' AND state IN ('planned', 'recovery'))
-                   OR (kind='move' AND source_identity=?2 AND state IN ('planned', 'recovery', 'conflict')))
+                   OR (kind='move' AND (source_identity=?2 OR cross_move_nonce IS NOT NULL)
+                       AND state IN ('planned', 'recovery', 'conflict')))
             )",
             rusqlite::params![path, key],
             |row| row.get(0),

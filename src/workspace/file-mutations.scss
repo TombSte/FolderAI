@@ -39,6 +39,18 @@
   overflow: auto;
 }
 
+.file-mutation-actions.file-context-actions[popover] {
+  margin: 0;
+  inset: 0 auto auto 0;
+  display: block;
+  width: max-content;
+  height: auto;
+  color: inherit;
+
+  > button { width: 100%; }
+}
+.file-context-actions[popover]:not(:popover-open) { display: none; }
+
 .file-mutation-dialog {
   box-sizing: border-box;
   width: min(360px, calc(100vw - 32px));
@@ -62,7 +74,8 @@
     color: inherit;
     font: inherit;
   }
-  [role='alert'], [role='status'] { margin: 0; overflow-wrap: anywhere; }
+  p { overflow-wrap: anywhere; }
+  [role='alert'], [role='status'] { margin: 0; }
   [role='alert'] { color: var(--error); }
 }
 

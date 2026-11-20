@@ -5,13 +5,15 @@ use std::{
     io,
     mem::MaybeUninit,
     os::{
-        fd::{AsRawFd, RawFd},
+        fd::{AsRawFd, FromRawFd, RawFd},
         unix::{
             ffi::OsStrExt,
             fs::{MetadataExt, OpenOptionsExt},
         },
     },
     path::PathBuf,
+    ptr,
+    sync::{Mutex, OnceLock},
 };
 
 /// An open APFS handle keeps the original native object alive while FolderAI
@@ -20,6 +22,7 @@ use std::{
 pub struct LiveIdentity {
     file: File,
     volume_uuid: [u8; 16],
+    deletion: OnceLock<DirectoryDeletion>,
 }
 
 impl LiveIdentity {
@@ -44,13 +47,33 @@ impl LiveIdentity {
             return Err(io::Error::from(io::ErrorKind::Unsupported));
         }
         let volume_uuid = apfs_volume_uuid(file.as_raw_fd())?;
-        Ok(Self { file, volume_uuid })
+        Ok(Self {
+            file,
+            volume_uuid,
+            deletion: OnceLock::new(),
+        })
+    }
+
+    /// APFS keeps the link count of an open directory after rmdir. Arm a
+    /// vnode observation before any relocation or removal to distinguish it
+    /// from a changed path. Regular files already provide a zero-link proof.
+    pub(crate) fn arm_directory_removal(&self) -> io::Result<()> {
+        if self.file.metadata()?.is_dir() && self.deletion.get().is_none() {
+            let observer = DirectoryDeletion::register(self.file.as_raw_fd())?;
+            let _ = self.deletion.set(observer);
+        }
+        Ok(())
     }
 
     /// Returns a locator only if the path still resolves to this open object.
     pub fn observe(&self) -> io::Result<LiveObservation> {
         let original = self.file.metadata()?;
         if original.nlink() == 0 {
+            return Ok(LiveObservation::Removed);
+        }
+        if let Some(deletion) = self.deletion.get()
+            && deletion.removed()?
+        {
             return Ok(LiveObservation::Removed);
         }
         if !is_unambiguous(&original) {
@@ -105,6 +128,92 @@ impl LiveIdentity {
         } else {
             "file"
         })
+    }
+}
+
+#[derive(Debug)]
+struct DirectoryDeletion {
+    queue: File,
+    removed: Mutex<bool>,
+}
+
+impl DirectoryDeletion {
+    fn register(directory: RawFd) -> io::Result<Self> {
+        // kqueue has no path arguments and returns a new owned descriptor.
+        let fd = unsafe { libc::kqueue() };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // The successful call above transferred ownership of this descriptor.
+        let queue = unsafe { File::from_raw_fd(fd) };
+        // Do not retain an extra reference across an exec of a different app.
+        if unsafe { libc::fcntl(queue.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC) } == -1 {
+            return Err(io::Error::last_os_error());
+        }
+        let interest = libc::kevent {
+            ident: directory as usize,
+            filter: libc::EVFILT_VNODE,
+            flags: libc::EV_ADD | libc::EV_CLEAR,
+            fflags: libc::NOTE_DELETE,
+            data: 0,
+            udata: ptr::null_mut(),
+        };
+        // The directory remains open for the lifetime of the monitored identity.
+        let result = unsafe {
+            libc::kevent(
+                queue.as_raw_fd(),
+                &interest,
+                1,
+                ptr::null_mut(),
+                0,
+                ptr::null(),
+            )
+        };
+        if result == -1 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self {
+            queue,
+            removed: Mutex::new(false),
+        })
+    }
+
+    fn removed(&self) -> io::Result<bool> {
+        let mut removed = self
+            .removed
+            .lock()
+            .map_err(|_| io::Error::other("directory removal observation lock was poisoned"))?;
+        if !*removed {
+            let mut event = MaybeUninit::<libc::kevent>::uninit();
+            let immediate = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            // One output slot with a zero timeout never waits for a later event.
+            let count = unsafe {
+                libc::kevent(
+                    self.queue.as_raw_fd(),
+                    ptr::null(),
+                    0,
+                    event.as_mut_ptr(),
+                    1,
+                    &immediate,
+                )
+            };
+            match count {
+                0 => {}
+                1 => {
+                    // kevent wrote exactly one event.
+                    let event = unsafe { event.assume_init() };
+                    if event.flags & libc::EV_ERROR != 0 {
+                        return Err(io::Error::from_raw_os_error(event.data as i32));
+                    }
+                    *removed = event.fflags & libc::NOTE_DELETE != 0;
+                }
+                _ => return Err(io::Error::last_os_error()),
+            }
+        }
+        Ok(*removed)
     }
 }
 

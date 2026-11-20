@@ -1,6 +1,7 @@
+import { WorkspaceContextMenu } from './FileMutationControls';
 import Markdown from 'react-markdown';
-import { ArrowDown, ArrowUp, Folder, Pencil, Plus, Star, Tag as TagIcon, X } from 'lucide-react';
-import { useRef, useState, type FormEvent } from 'react';
+import { Ellipsis, Folder, Pencil, Plus, Star, Tag as TagIcon, X } from 'lucide-react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { pathLabel } from './paths';
 import { organizationStrings, type Favorite, type Organization, type OrganizationChange, type OrganizedItem, type SelectionDetails, type Tag } from './organization';
 import type { useNoteDrafts } from './useNoteDrafts';
@@ -11,7 +12,10 @@ const favoriteDrag = 'application/x-folderai-favorite';
 export function Favorites({ data, mutate, open }: { data: Organization; mutate: Mutate; open: (favorite: Favorite) => void }) {
   const t = organizationStrings();
   const [editing, setEditing] = useState<{ id: string | null; name: string } | null>(null);
-  const [dragged, setDragged] = useState(false);
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ groupId: string | null; slot: number } | null>(null);
+  const menuId = useId();
+  const favoriteMenuPoint = useRef<{ x: number; y: number } | null>(null);
 
   async function saveGroup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,17 +27,38 @@ export function Favorites({ data, mutate, open }: { data: Organization; mutate: 
 
   function list(groupId: string | null, name: string) {
     const links = data.favorites.filter(favorite => favorite.groupId === groupId);
-    function move(id: string, destination: string | null, index: number) {
-      void mutate({ kind: 'move-favorite', id, groupId: destination, index });
+    function insertionSlot(group: HTMLElement, y: number) {
+      const rows = Array.from(group.querySelectorAll(':scope > .favorite-row'));
+      const next = rows.findIndex(row => {
+        const rect = row.getBoundingClientRect();
+        return y < rect.top + rect.height / 2;
+      });
+      return next < 0 ? links.length : next;
     }
 
     return (
-      <div key={groupId ?? 'root'} className="favorite-group" data-drop-target={dragged}
-        onDragOver={event => { if (event.dataTransfer.types.includes(favoriteDrag)) event.preventDefault(); }}
+      <div key={groupId ?? 'root'} className="favorite-group" data-drop-target={!!dragged}
+        data-insert-end={preview?.groupId === groupId && preview.slot === links.length}
+        onDragOver={event => {
+          if (!dragged) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          const slot = insertionSlot(event.currentTarget, event.clientY);
+          setPreview(current => current?.groupId === groupId && current.slot === slot ? current : { groupId, slot });
+        }}
+        onDragLeave={event => {
+          if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+            setPreview(current => current?.groupId === groupId ? null : current);
+          }
+        }}
         onDrop={event => {
-          const id = event.dataTransfer.getData(favoriteDrag);
-          if (id) { event.preventDefault(); move(id, groupId, links.length); }
-          setDragged(false);
+          if (!dragged) return;
+          event.preventDefault();
+          const slot = insertionSlot(event.currentTarget, event.clientY);
+          const from = links.findIndex(link => link.id === dragged);
+          const index = slot - (from >= 0 && from < slot ? 1 : 0);
+          if (index !== from) void mutate({ kind: 'move-favorite', id: dragged, groupId, index });
+          setDragged(null); setPreview(null);
         }}>
         {groupId && <div className="organization-row"><Folder aria-hidden="true" /><span title={name}>{name}</span>
           <button type="button" className="tool-button" title={t.renameGroup} aria-label={`${t.renameGroup} ${name}`}
@@ -46,35 +71,47 @@ export function Favorites({ data, mutate, open }: { data: Organization; mutate: 
           const label = (favorite.defaultLocation && t.defaultFavoriteNames[favorite.defaultLocation])
             || favorite.name || t.missing;
           return (
-            <div className="favorite-row" key={favorite.id} onDrop={event => {
-              const id = event.dataTransfer.getData(favoriteDrag);
-              if (id) { event.preventDefault(); event.stopPropagation(); move(id, groupId, index); }
-              setDragged(false);
+            <div className="favorite-row" key={favorite.id}
+              data-insert-before={preview?.groupId === groupId && preview.slot === index}
+              data-drag-source={dragged === favorite.id}
+              onContextMenu={event => {
+              event.preventDefault();
+              const menu = document.getElementById(`${menuId}-${favorite.id}`);
+              favoriteMenuPoint.current = { x: event.clientX, y: event.clientY };
+              menu?.showPopover();
+              menu?.querySelector('button')?.focus();
             }}>
               <button type="button" className="home-position organization-label" title={favorite.path ?? t.missing}
                 aria-disabled={!favorite.path} onClick={() => { if (favorite.path) open(favorite); }} draggable
-                onDragStart={event => { event.dataTransfer.setData(favoriteDrag, favorite.id); setDragged(true); }}
-                onDragEnd={() => setDragged(false)}>
+                onDragStart={event => { event.dataTransfer.setData(favoriteDrag, favorite.id); event.dataTransfer.effectAllowed = 'move'; setDragged(favorite.id); }}
+                onDragEnd={() => { setDragged(null); setPreview(null); }}>
                 <Star aria-hidden="true" /><span>{label}</span>
               </button>
-              <details className="organization-actions">
-                <summary aria-label={label}>⋯</summary>
-                <div className="organization-row">
-                  <button type="button" className="tool-button" aria-label={t.moveUp} title={t.moveUp} disabled={!index}
-                    onClick={() => move(favorite.id, groupId, index - 1)}><ArrowUp aria-hidden="true" /></button>
-                  <button type="button" className="tool-button" aria-label={t.moveDown} title={t.moveDown} disabled={index === links.length - 1}
-                    onClick={() => move(favorite.id, groupId, index + 1)}><ArrowDown aria-hidden="true" /></button>
-                  <button type="button" className="tool-button" aria-label={t.removeFavorite} title={t.removeFavorite}
-                    onClick={() => void mutate({ kind: 'remove-favorite', id: favorite.id })}><X aria-hidden="true" /></button>
-                </div>
-                {data.groups.length > 0 && <select aria-label={t.moveTo} value={groupId ?? ''} onChange={event => {
-                  const destination = event.target.value || null;
-                  move(favorite.id, destination, data.favorites.filter(row => row.groupId === destination).length);
+              <button type="button" className="tool-button" aria-label={`${label}: ${t.removeFavorite}`}
+                onClick={event => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  favoriteMenuPoint.current = { x: rect.left, y: rect.bottom };
+                }} popoverTarget={`${menuId}-${favorite.id}`}><Ellipsis aria-hidden="true" /></button>
+              <WorkspaceContextMenu id={`${menuId}-${favorite.id}`} popover="auto" aria-label={label}
+                onBeforeToggle={event => {
+                  if (event.newState !== 'open') return;
+                  const menu = event.currentTarget;
+                  const row = menu.parentElement!.getBoundingClientRect();
+                  const { x, y } = favoriteMenuPoint.current ?? { x: row.left, y: row.bottom };
+                  favoriteMenuPoint.current = null;
+                  menu.style.left = `${x}px`;
+                  menu.style.top = `${y}px`;
+                  requestAnimationFrame(() => {
+                    if (!menu.matches(':popover-open')) return;
+                    menu.style.left = `${Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8))}px`;
+                    menu.style.top = `${Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8))}px`;
+                  });
                 }}>
-                  <option value="">{t.root}</option>
-                  {data.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}
-                </select>}
-              </details>
+                <button type="button" autoFocus onClick={event => {
+                  event.currentTarget.parentElement?.hidePopover();
+                  void mutate({ kind: 'remove-favorite', id: favorite.id });
+                }}><X aria-hidden="true" />{t.removeFavorite}</button>
+              </WorkspaceContextMenu>
             </div>
           );
         })}
@@ -208,6 +245,7 @@ export function Inspector({ data, selected, items, loading, close, mutate, notes
   const [group, setGroup] = useState('');
   const count = selected?.count ?? 0;
   const single = count === 1 ? items[0] : undefined;
+  const favorite = single && data.favorites.find(row => row.itemId === single.id);
 
   return <aside className="organization-inspector" id="organization-inspector" aria-label={t.inspector}>
     <header className="organization-row"><h2>{t.inspector}</h2>
@@ -221,12 +259,15 @@ export function Inspector({ data, selected, items, loading, close, mutate, notes
           {single && <p className="organization-path">{single.path}</p>}
           {items.length === 0 ? <p>{t.unavailable}</p> : count > items.length && <p>{t.unresolved(items.length)}</p>}
           {single && <div className="organization-row favorite-add">
-            {data.groups.length > 0 && <select aria-label={t.moveTo} value={group} onChange={event => setGroup(event.target.value)}>
+            {!favorite && data.groups.length > 0 && <select aria-label={t.moveTo} value={group} onChange={event => setGroup(event.target.value)}>
               <option value="">{t.root}</option>
               {data.groups.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
             </select>}
-            <button type="button" onClick={() => void mutate({ kind: 'add-favorite', itemId: single.id, groupId: group || null })}>
-              <Star aria-hidden="true" />{t.addFavorite}
+            <button type="button" onClick={() => void mutate(favorite
+              ? { kind: 'remove-favorite', id: favorite.id }
+              : { kind: 'add-favorite', itemId: single.id, groupId: group || null })}>
+              <Star aria-hidden="true" fill={favorite ? 'currentColor' : 'none'} />
+              {favorite ? t.removeFavorite : t.addFavorite}
             </button>
           </div>}
           {data.tags.length > 0 && items.length > 0 && <fieldset>

@@ -1,30 +1,26 @@
-//! Unpublished tree staging primitive. The caller must journal each entry
-//! before staging, retain the returned witnesses, and handle recovery. This
-//! module does not publish or delete anything. On failure it returns retained
-//! witnesses and any unbound handle; callers must not assume all entries are
-//! owned or delete the staging directory merely because its names match.
+//! Recursive copies stage under an exclusive temporary name, journal each
+//! entry, then publish the whole tree with one native rename.
+
+#[path = "cross_tree.rs"]
+pub(super) mod cross_tree;
 
 use super::{
-    FileError,
-    copy::{check_cancellation, copy_chunks, version},
-    native::{Directory, EntryKind},
+    FileError, captured_directory_path,
+    copy::{check_cancellation, copy_chunks, copy_name, version},
+    native::{self, Directory, EntryKind},
 };
 use crate::{
     local_identity::{LiveIdentity, LiveObservation, Locator, canonical_path},
     storage::{CopyIntent, CopyKey, CopyPublication, Storage, StorageError},
 };
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     fs::{self, File, FileTimes},
     path::{Path, PathBuf},
     sync::atomic::AtomicBool,
     time::SystemTime,
 };
-
-// Capturing a tree retains an open witness per entry. Fail before writing if
-// that would use an unbounded number of descriptors; revisit with a scalable
-// witness/recovery design before this primitive is exposed to users.
-const MAX_TREE_ENTRIES: usize = 4096;
+use uuid::Uuid;
 
 type Version = (u64, SystemTime);
 
@@ -48,7 +44,7 @@ enum SourceKind {
     },
 }
 
-struct SourceTree {
+pub(super) struct SourceTree {
     nodes: Vec<SourceNode>,
 }
 
@@ -65,9 +61,7 @@ struct StagedNode {
 enum WitnessOrigin {
     ProvidedRoot,
     ExclusiveFile,
-    // mkdir followed by open does not prove that the opened directory is
-    // the one created if another process substitutes it between calls.
-    DirectoryOpenedAfterCreation,
+    WitnessedDirectory,
 }
 
 /// A creation succeeded but obtaining a usable identity did not. Never
@@ -82,6 +76,51 @@ struct StageFailure {
     error: FileError,
     partial: Option<Box<StagedTree>>,
     pending: Option<Box<PendingNode>>,
+}
+
+pub(super) enum TreeOutcome {
+    Completed(PathBuf, bool),
+    Pending(PendingTreeCopy),
+}
+
+pub(super) struct PendingTreeCopy {
+    destination: Directory,
+    visible_path: PathBuf,
+    journal: TreeJournal,
+    bound: Vec<BoundItem>,
+}
+
+impl PendingTreeCopy {
+    pub(super) fn path(&self) -> &Path {
+        &self.visible_path
+    }
+
+    pub(super) fn commit(&self, storage: &Storage) -> Result<(PathBuf, bool), FileError> {
+        self.destination
+            .verify()
+            .map_err(|_| FileError::RecoveryPending)?;
+        let mut pending = false;
+        for (item, bound) in self.journal.items.iter().zip(&self.bound) {
+            debug_assert_eq!(item.relative, bound.relative);
+            if storage
+                .access(|store| store.record_completed_copy(&item.intent, &bound.publication))
+                .is_err()
+                || !matches!(
+                    bound.publication.is_present_at(item.intent.destination()),
+                    Ok(true)
+                )
+            {
+                pending = true;
+            }
+        }
+        if pending {
+            return Err(FileError::RecoveryPending);
+        }
+        self.destination
+            .verify()
+            .map_err(|_| FileError::RecoveryPending)?;
+        Ok((self.visible_path.clone(), false))
+    }
 }
 
 impl StageFailure {
@@ -103,7 +142,10 @@ impl std::fmt::Debug for StageFailure {
                 "retained_nodes",
                 &self.partial.as_ref().map(|tree| tree.nodes.len()),
             )
-            .field("pending", &self.pending.is_some())
+            .field(
+                "pending",
+                &self.pending.as_ref().map(|entry| &entry.relative),
+            )
             .finish()
     }
 }
@@ -141,6 +183,36 @@ struct BindingFailure {
     bound: Vec<BoundItem>,
 }
 
+impl TreeJournal {
+    fn mark_recovery(&self, storage: &Storage) {
+        for item in &self.items {
+            let _ = storage.access(|store| {
+                store.recover_copy(CopyKey {
+                    operation_id: &self.operation_id,
+                    item_key: &item.item_key,
+                })
+            });
+        }
+    }
+
+    fn abandon(&self, storage: &Storage) -> Result<(), FileError> {
+        let mut pending = false;
+        for item in &self.items {
+            if storage
+                .access(|store| store.fail_copy(&item.intent))
+                .is_err()
+            {
+                pending = true;
+            }
+        }
+        if pending {
+            Err(FileError::RecoveryPending)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 impl std::fmt::Debug for BindingFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -169,6 +241,21 @@ fn node_path(root: &Path, relative: &Path) -> PathBuf {
     }
 }
 
+fn verify_file_at(
+    file: &File,
+    identity: &LiveIdentity,
+    expected: &Path,
+    original: Version,
+) -> Result<(), FileError> {
+    let expected = Locator::new(expected.to_owned()).ok_or(FileError::RecoveryPending)?;
+    if identity.observe()? != LiveObservation::Present(expected)
+        || version(&file.metadata()?)? != original
+    {
+        return Err(FileError::SourceChanged);
+    }
+    Ok(())
+}
+
 fn sorted_entries(directory: &Directory) -> Result<Vec<(OsString, EntryKind)>, FileError> {
     let mut entries = directory.entries()?;
     entries.sort_unstable_by(|left, right| left.0.cmp(&right.0));
@@ -176,13 +263,20 @@ fn sorted_entries(directory: &Directory) -> Result<Vec<(OsString, EntryKind)>, F
 }
 
 impl SourceTree {
-    fn capture(path: &Path, cancelled: &AtomicBool) -> Result<Self, FileError> {
+    pub(super) fn capture(path: &Path, cancelled: &AtomicBool) -> Result<Self, FileError> {
         check_cancellation(cancelled)?;
         // Do not silently follow a link selected as the root.
         if !fs::symlink_metadata(path)?.is_dir() {
             return Err(FileError::Unsupported);
         }
-        let root = Directory::open(&canonical_path(path)?)?;
+        let chosen_root = Directory::open(path)?;
+        let canonical = captured_directory_path(&chosen_root)?;
+        let root = Directory::open(&canonical)?;
+        let chosen = LiveIdentity::from_file(chosen_root.try_clone_file()?)?;
+        let opened = LiveIdentity::from_file(root.try_clone_file()?)?;
+        if chosen.comparison_key()? != opened.comparison_key()? {
+            return Err(FileError::SourceChanged);
+        }
         let mut nodes = vec![SourceNode {
             parent: None,
             name: OsString::new(),
@@ -209,9 +303,6 @@ impl SourceTree {
                 .iter()
                 .any(|(_, kind)| *kind == EntryKind::Unsupported)
             {
-                return Err(FileError::Unsupported);
-            }
-            if nodes.len().saturating_add(entries.len()) > MAX_TREE_ENTRIES {
                 return Err(FileError::Unsupported);
             }
             for (name, kind) in &entries {
@@ -260,7 +351,103 @@ impl SourceTree {
         Ok(tree)
     }
 
-    fn verify(&self, cancelled: &AtomicBool) -> Result<(), FileError> {
+    pub(super) fn count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub(super) fn remove_from_quarantine(
+        &self,
+        root: &Path,
+        quarantine: &Directory,
+        root_name: &OsStr,
+        removed: &mut [bool],
+        cancelled: &AtomicBool,
+        mut verify_effect: impl FnMut(usize) -> Result<(), FileError>,
+    ) -> Result<(), FileError> {
+        quarantine.verify()?;
+        let mut captured = Vec::with_capacity(self.nodes.len());
+        let mut expected = vec![Vec::new(); self.nodes.len()];
+        for (index, node) in self.nodes.iter().enumerate() {
+            check_cancellation(cancelled)?;
+            if removed[index] {
+                captured.push(None);
+                continue;
+            }
+            let resolved = node_path(root, &node.relative);
+            let (directory, kind) = match &node.kind {
+                SourceKind::File {
+                    file,
+                    identity,
+                    version: original,
+                    ..
+                } => {
+                    verify_file_at(file, identity, &resolved, *original)?;
+                    (None, EntryKind::RegularFile)
+                }
+                SourceKind::Directory { directory, .. } => {
+                    (Some(directory.relocate(resolved)?), EntryKind::Directory)
+                }
+            };
+            if let Some(parent) = node.parent {
+                expected[parent].push((node.name.clone(), kind));
+            }
+            captured.push(directory);
+        }
+        for (directory, entries) in captured.iter().zip(expected) {
+            if let Some(directory) = directory
+                && sorted_entries(directory)? != entries
+            {
+                return Err(FileError::RecoveryPending);
+            }
+        }
+        for index in (0..self.nodes.len()).rev() {
+            if removed[index] {
+                continue;
+            }
+            check_cancellation(cancelled)?;
+            verify_effect(index)?;
+            let node = &self.nodes[index];
+            let (parent, name) = if let Some(parent) = node.parent {
+                (
+                    captured[parent]
+                        .as_ref()
+                        .ok_or(FileError::RecoveryPending)?,
+                    node.name.as_os_str(),
+                )
+            } else {
+                (quarantine, root_name)
+            };
+            parent.verify()?;
+            match &node.kind {
+                SourceKind::File {
+                    file,
+                    identity,
+                    version: original,
+                    ..
+                } => {
+                    verify_file_at(file, identity, &node_path(root, &node.relative), *original)?;
+                    native::remove_file(parent, name)?;
+                }
+                SourceKind::Directory { .. } => {
+                    let directory = captured[index].as_ref().ok_or(FileError::RecoveryPending)?;
+                    directory.verify()?;
+                    native::remove_directory(parent, name)?;
+                }
+            }
+            removed[index] = true;
+        }
+        Ok(())
+    }
+
+    pub(super) fn matches_root(&self, identity: &LiveIdentity) -> Result<bool, FileError> {
+        let SourceKind::Directory { directory, .. } = &self.nodes[0].kind else {
+            return Ok(false);
+        };
+        let root = LiveIdentity::from_file(directory.try_clone_file()?)?;
+        Ok(root.comparison_key()? == identity.comparison_key()?)
+    }
+
+    pub(super) fn verify(&self, cancelled: &AtomicBool) -> Result<(), FileError> {
         for node in &self.nodes {
             check_cancellation(cancelled)?;
             match &node.kind {
@@ -290,6 +477,7 @@ impl SourceTree {
     /// Reserve one durable intent per node before creating staging entries.
     /// If preparation fails, the caller retains every previously recorded
     /// intent and must explicitly fail it only while no publication occurred.
+    #[cfg(test)]
     fn record_intents(
         &self,
         storage: &Storage,
@@ -297,14 +485,14 @@ impl SourceTree {
         operation_id: &str,
         cancelled: &AtomicBool,
     ) -> Result<TreeJournal, JournalFailure> {
-        self.record_intents_with_hook(storage, destination, operation_id, cancelled, |_| {})
+        self.record_intents_with_hook(storage, destination, (operation_id, ""), cancelled, |_| {})
     }
 
     fn record_intents_with_hook(
         &self,
         storage: &Storage,
         destination: &Path,
-        operation_id: &str,
+        (operation_id, item_prefix): (&str, &str),
         cancelled: &AtomicBool,
         mut after_intent: impl FnMut(usize),
     ) -> Result<TreeJournal, JournalFailure> {
@@ -326,7 +514,9 @@ impl SourceTree {
             else {
                 unreachable!();
             };
-            if root_destination.starts_with(source_root.path()) {
+            if root_destination != source_root.path()
+                && root_destination.starts_with(source_root.path())
+            {
                 return Err(FileError::InvalidRequest);
             }
             match fs::symlink_metadata(&root_destination) {
@@ -350,10 +540,10 @@ impl SourceTree {
                 }
                 let target = Locator::new(node_path(&journal.destination, &node.relative))
                     .ok_or(FileError::InvalidRequest)?;
-                let item_key = index.to_string();
+                let item_key = format!("{item_prefix}{index}");
                 let intent = storage.access(|store| {
                     if store.copy_destination_reserved(&target)? {
-                        return Err(StorageError::ReferenceConflict);
+                        return Ok(None);
                     }
                     let id = store
                         .resolve_live_item(&source, true)?
@@ -362,15 +552,26 @@ impl SourceTree {
                     if !reference.matches_open_identity(&identity)? {
                         return Err(StorageError::ReferenceConflict);
                     }
-                    store.record_copy_intent(
+                    let intent = store.record_copy_intent(
                         CopyKey {
                             operation_id,
                             item_key: &item_key,
                         },
                         &reference,
                         &target,
-                    )
+                    );
+                    match intent {
+                        Err(StorageError::ReferenceConflict)
+                            if store.copy_destination_reserved(&target)? =>
+                        {
+                            Ok(None)
+                        }
+                        result => result.map(Some),
+                    }
                 })?;
+                let Some(intent) = intent else {
+                    return Err(FileError::AlreadyExists);
+                };
                 journal.items.push(RecordedIntent {
                     relative: node.relative.clone(),
                     item_key,
@@ -453,25 +654,27 @@ impl SourceTree {
                 parent.verify().map_err(|_| FileError::RecoveryPending)?;
                 match &mut node.kind {
                     SourceKind::Directory { .. } => {
-                        parent.create_directory(&node.name)?;
+                        let child = parent.create_staging_directory(&node.name)?;
                         pending = Some(PendingNode {
                             relative: node.relative.clone(),
                             file: None,
-                            directory: None,
+                            directory: child.ok(),
                         });
                         after_create(&node.relative)?;
-                        let child = parent.open_directory(&node.name)?;
                         let entry = pending.as_mut().unwrap();
-                        entry.directory = Some(child);
                         let identity = LiveIdentity::from_file(
-                            entry.directory.as_ref().unwrap().try_clone_file()?,
+                            entry
+                                .directory
+                                .as_ref()
+                                .ok_or(FileError::CleanupFailed)?
+                                .try_clone_file()?,
                         )?;
                         let child = pending.take().unwrap().directory.unwrap();
                         directories.push(Some(child));
                         staged.push(StagedNode {
                             relative: node.relative.clone(),
                             identity,
-                            origin: WitnessOrigin::DirectoryOpenedAfterCreation,
+                            origin: WitnessOrigin::WitnessedDirectory,
                             file_version: None,
                         });
                     }
@@ -515,6 +718,16 @@ impl SourceTree {
                     }
                 }
                 after_node(&node.relative);
+            }
+            // Creating a child changes its parent's timestamp.
+            for (node, output) in self.nodes.iter().zip(&directories).rev() {
+                check_cancellation(cancelled)?;
+                if let (SourceKind::Directory { directory, .. }, Some(output)) =
+                    (&node.kind, output)
+                {
+                    let modified = directory.try_clone_file()?.metadata()?.modified()?;
+                    output.set_modified(modified)?;
+                }
             }
             Ok(())
         })();
@@ -608,6 +821,10 @@ impl StagedTree {
     /// future publication. This is not an atomic compare-and-publish.
     fn verify(&self, stage: &Directory, cancelled: &AtomicBool) -> Result<(), FileError> {
         self.source.verify(cancelled)?;
+        self.verify_output(stage, cancelled)
+    }
+
+    fn verify_output(&self, stage: &Directory, cancelled: &AtomicBool) -> Result<(), FileError> {
         stage.verify().map_err(|_| FileError::RecoveryPending)?;
         let root_path = canonical_path(stage.path()).map_err(|_| FileError::RecoveryPending)?;
         for (index, (source, output)) in self.source.nodes.iter().zip(&self.nodes).enumerate() {
@@ -638,6 +855,265 @@ impl StagedTree {
             }
         }
         Ok(())
+    }
+
+    fn discard(
+        &self,
+        stage: &Directory,
+        parent: &Directory,
+        name: &OsStr,
+    ) -> Result<(), FileError> {
+        let root = captured_directory_path(stage).map_err(|_| FileError::CleanupFailed)?;
+        let mut contents = vec![Vec::new(); self.nodes.len()];
+        for (source, output) in self.source.nodes.iter().zip(&self.nodes) {
+            if let Some(parent) = source.parent {
+                let kind = match output.origin {
+                    WitnessOrigin::ExclusiveFile => EntryKind::RegularFile,
+                    WitnessOrigin::WitnessedDirectory => EntryKind::Directory,
+                    WitnessOrigin::ProvidedRoot => return Err(FileError::CleanupFailed),
+                };
+                contents[parent].push((source.name.clone(), kind));
+            }
+        }
+        for (index, output) in self.nodes.iter().enumerate() {
+            Self::verify_owned(&root, output)?;
+            if let Some(directory) = &self.directories[index] {
+                directory.verify().map_err(|_| FileError::CleanupFailed)?;
+                if sorted_entries(directory).map_err(|_| FileError::CleanupFailed)?
+                    != contents[index]
+                {
+                    return Err(FileError::CleanupFailed);
+                }
+            }
+        }
+        // Only remove witnessed entries, deepest first. An unexpected child
+        // racing cleanup prevents its parent from being removed.
+        for index in (1..self.nodes.len()).rev() {
+            let source = &self.source.nodes[index];
+            let output = &self.nodes[index];
+            Self::verify_owned(&root, output)?;
+            let captured_parent = self.directories
+                [source.parent.ok_or(FileError::CleanupFailed)?]
+            .as_ref()
+            .ok_or(FileError::CleanupFailed)?;
+            captured_parent
+                .verify()
+                .map_err(|_| FileError::CleanupFailed)?;
+            match output.origin {
+                WitnessOrigin::ExclusiveFile => native::remove_file(captured_parent, &source.name),
+                WitnessOrigin::WitnessedDirectory => {
+                    native::remove_directory(captured_parent, &source.name)
+                }
+                WitnessOrigin::ProvidedRoot => return Err(FileError::CleanupFailed),
+            }
+            .map_err(|_| FileError::CleanupFailed)?;
+        }
+        Self::verify_owned(&root, &self.nodes[0])?;
+        discard_empty_stage(stage, parent, name)
+    }
+
+    fn verify_owned(root: &Path, entry: &StagedNode) -> Result<(), FileError> {
+        let expected =
+            Locator::new(node_path(root, &entry.relative)).ok_or(FileError::CleanupFailed)?;
+        if entry
+            .identity
+            .observe()
+            .map_err(|_| FileError::CleanupFailed)?
+            == LiveObservation::Present(expected)
+        {
+            Ok(())
+        } else {
+            Err(FileError::CleanupFailed)
+        }
+    }
+}
+
+fn discard_empty_stage(
+    stage: &Directory,
+    parent: &Directory,
+    name: &OsStr,
+) -> Result<(), FileError> {
+    stage.verify().map_err(|_| FileError::CleanupFailed)?;
+    parent.verify().map_err(|_| FileError::CleanupFailed)?;
+    native::remove_directory(parent, name).map_err(|_| FileError::CleanupFailed)
+}
+
+fn reserve_destination(
+    storage: &Storage,
+    source: &SourceTree,
+    directory: &Directory,
+    source_name: &OsStr,
+    operation: (&str, &str),
+    sequence: &mut usize,
+    cancelled: &AtomicBool,
+) -> Result<(OsString, TreeJournal), FileError> {
+    while *sequence < 10_000 {
+        directory.verify()?;
+        let name = copy_name(source_name, *sequence, true);
+        let prefix = format!("{}:{}:", operation.1, *sequence);
+        *sequence += 1;
+        match source.record_intents_with_hook(
+            storage,
+            &directory.path().join(&name),
+            (operation.0, &prefix),
+            cancelled,
+            |_| {},
+        ) {
+            Ok(journal) => return Ok((name, journal)),
+            Err(failure) => {
+                failure.journal.abandon(storage)?;
+                if failure.error != FileError::AlreadyExists {
+                    return Err(failure.error);
+                }
+            }
+        }
+    }
+    Err(FileError::AlreadyExists)
+}
+
+pub(super) fn copy_tree(
+    storage: &Storage,
+    path: &Path,
+    destination: &Directory,
+    operation: (&str, &str),
+    cancelled: &AtomicBool,
+) -> Result<TreeOutcome, FileError> {
+    copy_tree_with_hook(storage, path, destination, operation, cancelled, || {})
+}
+
+fn copy_tree_with_hook(
+    storage: &Storage,
+    path: &Path,
+    destination: &Directory,
+    operation: (&str, &str),
+    cancelled: &AtomicBool,
+    after_staging: impl FnOnce(),
+) -> Result<TreeOutcome, FileError> {
+    let source_name = path.file_name().ok_or(FileError::InvalidRequest)?;
+    let source = SourceTree::capture(path, cancelled)?;
+    let visible_destination = destination.duplicate()?;
+    let canonical = captured_directory_path(destination)?;
+    let directory = Directory::open(&canonical)?;
+    let visible = LiveIdentity::from_file(visible_destination.try_clone_file()?)?;
+    let anchored = LiveIdentity::from_file(directory.try_clone_file()?)?;
+    if visible.comparison_key()? != anchored.comparison_key()? {
+        return Err(FileError::NotFound);
+    }
+    let SourceKind::Directory {
+        directory: source_root,
+        ..
+    } = &source.nodes[0].kind
+    else {
+        unreachable!();
+    };
+    if directory.path().starts_with(source_root.path()) {
+        return Err(FileError::InvalidRequest);
+    }
+    let mut sequence = 0;
+    let mut candidate = reserve_destination(
+        storage,
+        &source,
+        &directory,
+        source_name,
+        operation,
+        &mut sequence,
+        cancelled,
+    )?;
+    let temporary_name = OsString::from(format!(".folderai-{}", Uuid::new_v4()));
+    let stage = match directory.create_staging_directory(&temporary_name) {
+        Ok(Ok(stage)) => stage,
+        result => {
+            candidate.1.abandon(storage)?;
+            return Err(match result {
+                Err(error) => error.into(),
+                _ => FileError::CleanupFailed,
+            });
+        }
+    };
+    let staged = match source.stage(&stage, cancelled) {
+        Ok(staged) => staged,
+        Err(failure) => {
+            candidate.1.abandon(storage)?;
+            if failure.pending.is_some() || failure.error == FileError::RecoveryPending {
+                return Err(FileError::CleanupFailed);
+            }
+            if let Some(partial) = failure.partial {
+                partial.discard(&stage, &directory, &temporary_name)?;
+            } else {
+                discard_empty_stage(&stage, &directory, &temporary_name)?;
+            }
+            return Err(failure.error);
+        }
+    };
+    after_staging();
+    loop {
+        let (name, journal) = candidate;
+        let ready = staged
+            .bind_publications(&stage, &journal, cancelled)
+            .map_err(|failure| failure.error)
+            .and_then(|bound| {
+                staged.verify(&stage, cancelled)?;
+                visible_destination.verify()?;
+                directory.verify()?;
+                check_cancellation(cancelled)?;
+                Ok(bound)
+            });
+        let bound = match ready {
+            Ok(bound) => bound,
+            Err(error) => {
+                journal.abandon(storage)?;
+                if error == FileError::RecoveryPending {
+                    return Err(FileError::CleanupFailed);
+                }
+                staged.discard(&stage, &directory, &temporary_name)?;
+                return Err(error);
+            }
+        };
+        let publication = native::publish(&directory, &temporary_name, &directory, &name);
+        if let Err(error) = publication {
+            let unchanged = staged
+                .verify_output(&stage, &AtomicBool::new(false))
+                .is_ok();
+            if unchanged {
+                journal.abandon(storage)?;
+                let next = if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    reserve_destination(
+                        storage,
+                        &staged.source,
+                        &directory,
+                        source_name,
+                        operation,
+                        &mut sequence,
+                        cancelled,
+                    )
+                } else {
+                    Err(error.into())
+                };
+                match next {
+                    Ok(attempt) => {
+                        candidate = attempt;
+                        continue;
+                    }
+                    Err(error) => {
+                        staged.discard(&stage, &directory, &temporary_name)?;
+                        return Err(error);
+                    }
+                }
+            }
+        }
+        let pending = PendingTreeCopy {
+            visible_path: visible_destination.path().join(name),
+            destination: visible_destination,
+            journal,
+            bound,
+        };
+        return match pending.commit(storage) {
+            Ok((path, cleanup)) => Ok(TreeOutcome::Completed(path, cleanup)),
+            Err(_) => {
+                pending.journal.mark_recovery(storage);
+                Ok(TreeOutcome::Pending(pending))
+            }
+        };
     }
 }
 
@@ -671,6 +1147,157 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn engine_publishes_whole_tree_after_late_collision() {
+        let f = Fixture::new();
+        let storage = f.storage();
+        fs::create_dir(f.source().join("empty")).unwrap();
+        let modified = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        Directory::open(&f.source().join("nested"))
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        let outcome = copy_tree_with_hook(
+            &storage,
+            &f.source(),
+            &Directory::open(&f.0).unwrap(),
+            ("tree-copy", "0"),
+            &AtomicBool::new(false),
+            || fs::write(f.0.join("source - copy"), b"racing file").unwrap(),
+        )
+        .unwrap();
+        let TreeOutcome::Completed(path, false) = outcome else {
+            panic!("copy should publish");
+        };
+        assert_eq!(path, f.0.join("source - copy (2)"));
+        assert_eq!(fs::read(f.0.join("source - copy")).unwrap(), b"racing file");
+        assert!(path.join("empty").is_dir());
+        assert_eq!(fs::read(path.join("nested/caffè.txt")).unwrap(), b"nested");
+        assert_eq!(
+            fs::metadata(path.join("nested"))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            modified
+        );
+        assert_eq!(fs::read(f.source().join("first.txt")).unwrap(), b"first");
+        assert!(!f.0.read_dir().unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".folderai-")
+        }));
+    }
+
+    #[test]
+    fn engine_cleans_cancelled_tree_and_preserves_unknown_staging_content() {
+        let f = Fixture::new();
+        let storage = f.storage();
+        let destination = f.0.join("destination");
+        fs::create_dir(&destination).unwrap();
+        let cancelled = AtomicBool::new(false);
+        let run = copy_tree_with_hook(
+            &storage,
+            &f.source(),
+            &Directory::open(&destination).unwrap(),
+            ("cancel-tree", "0"),
+            &cancelled,
+            || cancelled.store(true, Ordering::Release),
+        );
+        assert!(matches!(run, Err(FileError::Cancelled)));
+        assert_eq!(destination.read_dir().unwrap().count(), 0);
+        let cancelled = AtomicBool::new(false);
+        let run = copy_tree_with_hook(
+            &storage,
+            &f.source(),
+            &Directory::open(&destination).unwrap(),
+            ("foreign-content", "0"),
+            &cancelled,
+            || {
+                let stage = destination
+                    .read_dir()
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .path();
+                fs::write(stage.join("foreign"), b"preserve").unwrap();
+                cancelled.store(true, Ordering::Release);
+            },
+        );
+        assert!(matches!(run, Err(FileError::CleanupFailed)));
+        let stage = destination
+            .read_dir()
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert_eq!(fs::read(stage.join("foreign")).unwrap(), b"preserve");
+        assert_eq!(fs::read(stage.join("first.txt")).unwrap(), b"first");
+        assert_eq!(fs::read(f.source().join("first.txt")).unwrap(), b"first");
+        assert!(!destination.join("source").exists());
+    }
+
+    #[test]
+    fn engine_recovers_published_tree_without_copying_again() {
+        let f = Fixture::new();
+        let storage = f.storage();
+        let destination = f.0.join("destination");
+        fs::create_dir(&destination).unwrap();
+        let outcome = copy_tree_with_hook(
+            &storage,
+            &f.source(),
+            &Directory::open(&destination).unwrap(),
+            ("recover-tree", "0"),
+            &AtomicBool::new(false),
+            || {
+                storage
+                    .access(|store| {
+                        store.connection.execute_batch(
+                    "CREATE TRIGGER reject_engine_copy AFTER UPDATE OF state ON operation_items
+                     WHEN NEW.state='completed' AND NEW.item_key='0:0:2'
+                     BEGIN SELECT raise(ABORT, 'test copy commit'); END;",
+                )?;
+                        Ok(())
+                    })
+                    .unwrap()
+            },
+        )
+        .unwrap();
+        let TreeOutcome::Pending(copy) = outcome else {
+            panic!("copy should still be pending");
+        };
+        assert_eq!(
+            fs::read(destination.join("source/nested/caffè.txt")).unwrap(),
+            b"nested"
+        );
+        let copies = super::super::CopyRecoveries::default();
+        let request = Uuid::new_v4();
+        copies
+            .remember("main", request, 0, super::super::PendingCopy::Tree(copy))
+            .unwrap();
+        assert_eq!(
+            copies.retry("other", request, 0, &storage),
+            Err(FileError::RecoveryPending)
+        );
+        storage
+            .access(|store| {
+                store
+                    .connection
+                    .execute_batch("DROP TRIGGER reject_engine_copy")?;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            copies.retry("main", request, 0, &storage),
+            Ok((destination.join("source"), false))
+        );
+        assert!(!copies.has_pending("main", request, 0).unwrap());
+        assert_eq!(destination.read_dir().unwrap().count(), 1);
     }
 
     #[test]
@@ -732,7 +1359,7 @@ mod tests {
         let result = tree.record_intents_with_hook(
             &storage,
             &f.0.join("output"),
-            "partial-operation",
+            ("partial-operation", ""),
             &cancelled,
             |index| {
                 if index == 1 {
@@ -1109,7 +1736,7 @@ mod tests {
             Err(error) => error,
             Ok(_) => panic!("reservation should conflict"),
         };
-        assert_eq!(failure.error, FileError::RecoveryPending);
+        assert_eq!(failure.error, FileError::AlreadyExists);
         assert!(failure.journal.items.is_empty());
         assert_eq!(first.items.len(), 4);
         for item in &first.items {
@@ -1130,7 +1757,7 @@ mod tests {
         let result = tree.record_intents_with_hook(
             &storage,
             &f.0.join("output"),
-            "changing",
+            ("changing", ""),
             &cancelled,
             |index| {
                 if index == 0 {
@@ -1196,7 +1823,7 @@ mod tests {
                 .find(|node| node.relative == Path::new("nested"))
                 .unwrap()
                 .origin,
-            WitnessOrigin::DirectoryOpenedAfterCreation
+            WitnessOrigin::WitnessedDirectory
         );
         for entry in &staged.nodes {
             let path = stage.path().join(&entry.relative);
@@ -1414,7 +2041,7 @@ mod tests {
     }
 
     #[test]
-    fn failure_after_mkdir_records_unwitnessed_directory_without_deleting_it() {
+    fn failure_after_mkdir_retains_directory_handle_without_deleting_it() {
         let f = Fixture::new();
         let cancelled = AtomicBool::new(false);
         let tree = SourceTree::capture(&f.source(), &cancelled).unwrap();
@@ -1440,7 +2067,7 @@ mod tests {
         let pending = failure.pending.as_ref().unwrap();
         assert_eq!(pending.relative, Path::new("nested"));
         assert!(pending.file.is_none());
-        assert!(pending.directory.is_none());
+        assert!(pending.directory.is_some());
         assert!(stage.path().join("nested").is_dir());
         assert_eq!(
             fs::read(f.source().join("nested/caffè.txt")).unwrap(),

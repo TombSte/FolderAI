@@ -29,11 +29,17 @@ export function saveWorkspaceView(path: string | null, view: ViewOptions | null,
   return invoke<void>('save_workspace_view', { path, view, folderIdentity });
 }
 
+export function fileExtension(entry: Entry) {
+  if (entry.kind !== 'file') return '';
+  const dot = entry.name.lastIndexOf('.');
+  return dot > 0 ? entry.name.slice(dot + 1).toLowerCase() : '';
+}
+
 export function sortEntries(entries: Entry[], options: ViewOptions, collator: Intl.Collator) {
   const field = (entry: Entry) => {
     switch (options.sort) {
       case 'name': return entry.name;
-      case 'kind': return entry.kind;
+      case 'kind': return `${entry.kind}:${fileExtension(entry)}`;
       case 'size': return entry.size;
       case 'modified': return entry.modifiedMs;
       case 'created': return entry.createdMs ?? null;

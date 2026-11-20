@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     local_identity::{LiveIdentity, LiveObservation, Locator, canonical_path},
-    storage::{CopyIntent, CopyKey, Storage, StorageError, TrackedReference},
+    storage::{CopyIntent, CopyKey, CopyPublication, Storage, StorageError, TrackedReference},
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -53,7 +53,7 @@ fn prepare_candidate(
     destination: &Path,
     source_name: &OsStr,
     source: &TrackedReference,
-    operation: &str,
+    operation: (&str, &str),
     sequence: &mut usize,
 ) -> Result<(OsString, CopyIntent), FileError> {
     while *sequence < 10_000 {
@@ -68,9 +68,9 @@ fn prepare_candidate(
             Err(error) => return Err(error.into()),
         }
         let locator = Locator::new(path).ok_or(FileError::InvalidRequest)?;
-        let attempt = attempt.to_string();
+        let attempt = format!("{}:{attempt}", operation.1);
         let key = CopyKey {
-            operation_id: operation,
+            operation_id: operation.0,
             item_key: &attempt,
         };
         let intent = storage.access(|store| {
@@ -123,34 +123,38 @@ pub(super) fn copy_chunks(
     }
 }
 
-struct Stage<'a> {
-    parent: &'a Directory,
+pub(super) struct Stage {
     name: OsString,
-    directory: Directory,
+    pub(super) directory: Directory,
 }
 
-const PAYLOAD: &str = "payload";
+pub(super) const PAYLOAD: &str = "payload";
 
-impl<'a> Stage<'a> {
-    fn prepare(parent: &'a Directory, operation: &str) -> Result<Self, FileError> {
+impl Stage {
+    pub(super) fn prepare(parent: &Directory, operation: &str) -> Result<Self, FileError> {
         let name = OsString::from(format!(".folderai-{operation}"));
         parent.verify()?;
-        parent.create_directory(&name)?;
         let directory = parent
-            .open_directory(&name)
+            .create_staging_directory(&name)?
             .map_err(|_| FileError::CleanupFailed)?;
-        Ok(Self {
-            parent,
-            name,
-            directory,
-        })
+        Ok(Self { name, directory })
     }
 
-    fn fill(
+    pub(super) fn fill(
         &self,
         source: &mut File,
         reference: &TrackedReference,
         cancelled: &AtomicBool,
+    ) -> Result<(LiveIdentity, (u64, std::time::SystemTime)), FileError> {
+        self.fill_with(source, reference, cancelled, copy_chunks)
+    }
+
+    pub(super) fn fill_with(
+        &self,
+        source: &mut File,
+        reference: &TrackedReference,
+        cancelled: &AtomicBool,
+        copy: impl FnOnce(&mut File, &mut File, &AtomicBool) -> Result<u64, FileError>,
     ) -> Result<(LiveIdentity, (u64, std::time::SystemTime)), FileError> {
         let payload = OsStr::new(PAYLOAD);
         let mut staged = self.directory.create_file(payload)?;
@@ -161,7 +165,7 @@ impl<'a> Stage<'a> {
             .map_err(|_| FileError::CleanupFailed)?;
         let result = (|| {
             let initial = version(&source.metadata()?)?;
-            if copy_chunks(source, &mut staged, cancelled)? != initial.0
+            if copy(source, &mut staged, cancelled)? != initial.0
                 || version(&source.metadata()?)? != initial
                 || reference.verify_source().is_err()
             {
@@ -181,7 +185,7 @@ impl<'a> Stage<'a> {
         }
     }
 
-    fn assert_payload(&self, identity: &LiveIdentity) -> Result<(), FileError> {
+    pub(super) fn assert_payload(&self, identity: &LiveIdentity) -> Result<(), FileError> {
         self.directory
             .verify()
             .map_err(|_| FileError::RecoveryPending)?;
@@ -205,57 +209,46 @@ impl<'a> Stage<'a> {
         }
     }
 
-    fn discard_payload(&self, identity: &LiveIdentity) -> Result<(), FileError> {
+    pub(super) fn discard_payload(&self, identity: &LiveIdentity) -> Result<(), FileError> {
         self.assert_payload(identity)?;
         native::remove_file(&self.directory, OsStr::new(PAYLOAD))
             .map_err(|_| FileError::CleanupFailed)
     }
 
-    fn discard_empty(self) -> Result<(), FileError> {
+    pub(super) fn discard_empty(self, parent: &Directory) -> Result<(), FileError> {
+        parent.verify().map_err(|_| FileError::CleanupFailed)?;
         self.directory
             .verify()
             .map_err(|_| FileError::CleanupFailed)?;
         if !self.directory.entries()?.is_empty() {
             return Err(FileError::RecoveryPending);
         }
-        native::remove_directory(self.parent, &self.name).map_err(|_| FileError::CleanupFailed)
+        native::remove_directory(parent, &self.name).map_err(|_| FileError::CleanupFailed)
     }
 }
 
-fn abandon(storage: &Storage, intent: &CopyIntent) -> Result<(), FileError> {
+pub(super) fn abandon(storage: &Storage, intent: &CopyIntent) -> Result<(), FileError> {
     storage
         .access(|store| store.fail_copy(intent))
         .map_err(|_| FileError::RecoveryPending)
 }
 
-pub(super) fn copy_file(
+pub(super) fn capture_source(
     storage: &Storage,
     path: &Path,
-    destination: &Path,
-    cancelled: &AtomicBool,
-) -> Result<(PathBuf, bool), FileError> {
-    copy_file_with_hook(storage, path, destination, cancelled, || {})
-}
-
-// The hook permits deterministic tests of changes at the staging/publication boundary.
-fn copy_file_with_hook(
-    storage: &Storage,
-    path: &Path,
-    destination: &Path,
-    cancelled: &AtomicBool,
-    after_staging: impl FnOnce(),
-) -> Result<(PathBuf, bool), FileError> {
-    check_cancellation(cancelled)?;
+) -> Result<(File, TrackedReference), FileError> {
     let source_name = path.file_name().ok_or(FileError::InvalidRequest)?;
     let origin = Directory::open(path.parent().ok_or(FileError::InvalidRequest)?)?;
-    let directory = Directory::open(destination)?;
-    let destination = captured_directory_path(&directory)?;
-    let mut source = origin.open_file(source_name)?;
+    let source = origin.open_file(source_name)?;
     let opened = LiveIdentity::from_file(source.try_clone()?)?;
     let LiveObservation::Present(locator) = opened.observe()? else {
         return Err(FileError::SourceChanged);
     };
     origin.verify()?;
+    let current = LiveIdentity::from_file(origin.open_file(source_name)?)?;
+    if current.comparison_key()? != opened.comparison_key()? {
+        return Err(FileError::SourceChanged);
+    }
     let reference = storage.access(|store| {
         let id = store
             .resolve_live_item(&locator, true)?
@@ -266,18 +259,106 @@ fn copy_file_with_hook(
         }
         Ok(reference)
     })?;
-    let operation = Uuid::new_v4().to_string();
+    Ok((source, reference))
+}
+
+pub(super) enum FileOutcome {
+    Completed(PathBuf, bool),
+    Pending(Box<PendingFileCopy>),
+}
+
+pub(super) struct PendingFileCopy {
+    destination: Directory,
+    stage: Option<Stage>,
+    path: PathBuf,
+    intent: CopyIntent,
+    publication: CopyPublication,
+}
+
+impl PendingFileCopy {
+    pub(super) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(super) fn commit(&mut self, storage: &Storage) -> Result<(PathBuf, bool), FileError> {
+        self.destination
+            .verify()
+            .map_err(|_| FileError::RecoveryPending)?;
+        storage
+            .access(|store| store.record_completed_copy(&self.intent, &self.publication))
+            .map_err(|_| FileError::RecoveryPending)?;
+        if !self
+            .publication
+            .is_present_at(self.intent.destination())
+            .unwrap_or(false)
+        {
+            return Err(FileError::RecoveryPending);
+        }
+        self.destination
+            .verify()
+            .map_err(|_| FileError::RecoveryPending)?;
+        let cleanup_pending = self
+            .stage
+            .take()
+            .is_some_and(|stage| stage.discard_empty(&self.destination).is_err());
+        Ok((self.path.clone(), cleanup_pending))
+    }
+}
+
+pub(super) fn copy_file_in(
+    storage: &Storage,
+    path: &Path,
+    directory: &Directory,
+    operation: (&str, &str),
+    cancelled: &AtomicBool,
+) -> Result<FileOutcome, FileError> {
+    copy_file_in_with_hook(storage, path, directory, operation, cancelled, || {})
+}
+
+#[cfg(test)]
+fn copy_file_with_hook(
+    storage: &Storage,
+    path: &Path,
+    destination: &Path,
+    cancelled: &AtomicBool,
+    after_staging: impl FnOnce(),
+) -> Result<(PathBuf, bool), FileError> {
+    match copy_file_in_with_hook(
+        storage,
+        path,
+        &Directory::open(destination)?,
+        (&Uuid::new_v4().to_string(), "0"),
+        cancelled,
+        after_staging,
+    )? {
+        FileOutcome::Completed(path, cleanup) => Ok((path, cleanup)),
+        FileOutcome::Pending(_) => Err(FileError::RecoveryPending),
+    }
+}
+
+fn copy_file_in_with_hook(
+    storage: &Storage,
+    path: &Path,
+    directory: &Directory,
+    operation: (&str, &str),
+    cancelled: &AtomicBool,
+    after_staging: impl FnOnce(),
+) -> Result<FileOutcome, FileError> {
+    check_cancellation(cancelled)?;
+    let source_name = path.file_name().ok_or(FileError::InvalidRequest)?;
+    let destination = captured_directory_path(directory)?;
+    let (mut source, reference) = capture_source(storage, path)?;
     let mut sequence = 0;
     let mut candidate = prepare_candidate(
         storage,
-        &directory,
+        directory,
         &destination,
         source_name,
         &reference,
-        &operation,
+        operation,
         &mut sequence,
     )?;
-    let stage = match Stage::prepare(&directory, &operation) {
+    let stage = match Stage::prepare(directory, &Uuid::new_v4().to_string()) {
         Ok(stage) => stage,
         Err(error) => {
             abandon(storage, &candidate.1)?;
@@ -290,76 +371,100 @@ fn copy_file_with_hook(
             abandon(storage, &candidate.1)?;
             // If an identity cannot be established, retain the staging directory.
             if !matches!(error, FileError::RecoveryPending | FileError::CleanupFailed) {
-                stage.discard_empty()?;
+                stage.discard_empty(directory)?;
             }
             return Err(error);
         }
     };
 
+    let staged_version = version(&stage.directory.open_file(OsStr::new(PAYLOAD))?.metadata()?)?;
     after_staging();
     loop {
         let (name, intent) = candidate;
-        stage.assert_payload(&staged)?;
-        if let Err(error) = check_cancellation(cancelled)
-            .and_then(|_| directory.verify().map_err(FileError::from))
-            .and_then(|_| {
-                if version(&source.metadata()?).map_err(FileError::from)? != source_version
-                    || reference.verify_source().is_err()
-                {
-                    Err(FileError::SourceChanged)
-                } else {
-                    Ok(())
-                }
-            })
-        {
+        if let Err(error) = stage.assert_payload(&staged) {
             abandon(storage, &intent)?;
-            stage.discard_payload(&staged)?;
-            stage.discard_empty()?;
             return Err(error);
         }
-        let stage_file = stage.directory.open_file(OsStr::new(PAYLOAD))?;
-        let witness = LiveIdentity::from_file(stage_file)?;
-        if witness.comparison_key()? != staged.comparison_key()? {
-            return Err(FileError::RecoveryPending);
-        }
-        let publication = intent.bind_staged_destination(witness)?;
-        match native::publish(&stage.directory, OsStr::new(PAYLOAD), &directory, &name) {
-            Ok(()) => {
-                directory.verify().map_err(|_| FileError::RecoveryPending)?;
-                storage
-                    .access(|store| store.record_completed_copy(&intent, &publication))
-                    .map_err(|_| FileError::RecoveryPending)?;
-                let cleanup_pending = stage.discard_empty().is_err();
-                return Ok((directory.path().join(name), cleanup_pending));
+        let ready = (|| {
+            check_cancellation(cancelled)?;
+            directory.verify()?;
+            if version(&source.metadata()?)? != source_version || reference.verify_source().is_err()
+            {
+                return Err(FileError::SourceChanged);
             }
+            let stage_file = stage.directory.open_file(OsStr::new(PAYLOAD))?;
+            if version(&stage_file.metadata()?)? != staged_version {
+                return Err(FileError::RecoveryPending);
+            }
+            let witness = LiveIdentity::from_file(stage_file)?;
+            if witness.comparison_key()? != staged.comparison_key()? {
+                return Err(FileError::RecoveryPending);
+            }
+            let publication = intent.bind_staged_destination(witness)?;
+            let retained = directory.duplicate()?;
+            check_cancellation(cancelled)?;
+            Ok((publication, retained))
+        })();
+        let (publication, retained) = match ready {
+            Ok(proof) => proof,
             Err(error) => {
-                // If the object no longer lives under the captured staging name,
-                // leave the attempt and its artifacts for reconciliation.
-                stage.assert_payload(&staged)?;
                 abandon(storage, &intent)?;
-                let next = if error.kind() == io::ErrorKind::AlreadyExists {
-                    prepare_candidate(
-                        storage,
-                        &directory,
-                        &destination,
-                        source_name,
-                        &reference,
-                        &operation,
-                        &mut sequence,
-                    )
-                } else {
-                    Err(error.into())
-                };
-                match next {
-                    Ok(attempt) => candidate = attempt,
-                    Err(error) => {
-                        stage.discard_payload(&staged)?;
-                        stage.discard_empty()?;
-                        return Err(error);
-                    }
+                if error != FileError::RecoveryPending {
+                    stage.discard_payload(&staged)?;
+                    stage.discard_empty(directory)?;
+                }
+                return Err(error);
+            }
+        };
+        let effect = native::publish(&stage.directory, OsStr::new(PAYLOAD), directory, &name);
+        if let Err(error) = effect
+            && stage.assert_payload(&staged).is_ok()
+        {
+            abandon(storage, &intent)?;
+            let next = if error.kind() == io::ErrorKind::AlreadyExists {
+                prepare_candidate(
+                    storage,
+                    directory,
+                    &destination,
+                    source_name,
+                    &reference,
+                    operation,
+                    &mut sequence,
+                )
+            } else {
+                Err(error.into())
+            };
+            match next {
+                Ok(attempt) => {
+                    candidate = attempt;
+                    continue;
+                }
+                Err(error) => {
+                    stage.discard_payload(&staged)?;
+                    stage.discard_empty(directory)?;
+                    return Err(error);
                 }
             }
         }
+        let mut pending = PendingFileCopy {
+            destination: retained,
+            stage: Some(stage),
+            path: directory.path().join(name),
+            intent,
+            publication,
+        };
+        return match pending.commit(storage) {
+            Ok((path, cleanup)) => Ok(FileOutcome::Completed(path, cleanup)),
+            Err(_) => {
+                let _ = storage.access(|store| {
+                    store.recover_copy(CopyKey {
+                        operation_id: operation.0,
+                        item_key: &format!("{}:{}", operation.1, sequence - 1),
+                    })
+                });
+                Ok(FileOutcome::Pending(Box::new(pending)))
+            }
+        };
     }
 }
 
@@ -471,7 +576,10 @@ mod tests {
         let stage = Stage::prepare(&destination, &Uuid::new_v4().to_string()).unwrap();
         let entry = stage.directory.path().join("unexpected");
         fs::write(&entry, b"not ours").unwrap();
-        assert_eq!(stage.discard_empty(), Err(FileError::RecoveryPending));
+        assert_eq!(
+            stage.discard_empty(&destination),
+            Err(FileError::RecoveryPending)
+        );
         assert_eq!(fs::read(entry).unwrap(), b"not ours");
     }
 

@@ -26,3 +26,5 @@ Traceability covers RF-016–017 RF-024–026 RT-005–006.
 
 ## Handoff
 - 2026-11-18 codex. Planned and ready once dependencies and implementation autonomy are resolved. Review the cited acceptance criteria, then work in the areas above. Validation is pending.
+
+- pi: drag/drop interno di singolo file/cartella su cartella nelle viste elenco e griglia (`src/workspace/FolderPane.tsx`), anteprima nativa con icona/nome e contorno destinazione (`workspace.scss`). Riusa `start_transfer` move; ignora drop su sé, discendenti o genitore già corrente. Build frontend e bundle macOS passati. Mancano verifica interattiva WebKit/Windows, vista colonne, selezioni multiple e drag da/verso il sistema.
