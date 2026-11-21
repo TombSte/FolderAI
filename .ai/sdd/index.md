@@ -9,6 +9,7 @@
 - file-operations [transfer-and-undo-contract, file-transfer-engine, trash-undo-and-activity, native-integration-contract, native-file-integration, links-and-zip]
 ## Blocked
 ## To Be Validated
+- workspace-frosted-glass [spec, workspace, feedback, validation]
 - workspace-navigation [session-and-layout-contract, navigation-sessions, file-views-and-selection, workspace-controls-and-settings]
 ## Done
 - desktop-foundation [platform-capability-matrix, scaffold-desktop-app, typed-ipc-and-read-adapter, initial-workspace]

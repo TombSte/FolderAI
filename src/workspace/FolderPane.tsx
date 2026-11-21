@@ -588,6 +588,7 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
       draggable: true,
       onDragStart(event) {
         draggedEntry = item;
+        event.currentTarget.dataset.fileDragSource = 'true';
         event.dataTransfer.setData(workspaceFileDrag, 'move');
         event.dataTransfer.effectAllowed = 'move';
         const ghost = document.createElement('div');
@@ -599,7 +600,8 @@ export default function FolderPane({ tab, panelId, panelIndex, focused, visible,
         event.dataTransfer.setDragImage(ghost, 16, 16);
         window.setTimeout(() => ghost.remove(), 0);
       },
-      onDragEnd() {
+      onDragEnd(event) {
+        delete event.currentTarget.dataset.fileDragSource;
         draggedEntry = null;
         document.querySelectorAll('[data-file-drop-target]').forEach(node => node.removeAttribute('data-file-drop-target'));
       },

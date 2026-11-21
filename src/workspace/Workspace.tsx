@@ -1,4 +1,4 @@
-import { AppWindow, Columns2, Folder, House, Layers, PanelLeft, PanelRight, Plus, Settings, X } from 'lucide-react';
+import { AppWindow, ArrowRight, Columns2, Copy, Folder, House, Layers, PanelLeft, PanelRight, Plus, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -16,6 +16,7 @@ import { loadOrganization, organizationStrings, updateOrganization, type Favorit
 import { useNoteDrafts } from './useNoteDrafts';
 import { ActivityToggle, WindowActivity, activityLabels, useTransferActivities } from './WindowActivity';
 import './workspace.scss';
+import './frosted-glass.scss';
 
 const noTags: Tag[] = [];
 
@@ -50,6 +51,7 @@ export default function Workspace() {
   const [sidebar, setSidebar] = useState(true);
   const [error, setError] = useState(false);
   const [tabMenu, setTabMenu] = useState<string | null>(null);
+  const [tabDrag, setTabDrag] = useState<{ source: string; target?: string } | null>(null);
   const [controls, setControls] = useState(defaultControls);
   const [inspector, setInspector] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(278);
@@ -419,11 +421,31 @@ export default function Workspace() {
               <div className="workspace-tab-strip" role="tablist" aria-label={strings.pane(paneIndex + 1)}>
                 {panel.tabs.map((tab, index) => (
                   <span className="workspace-tab-item" key={tab.id}
-                    onDragOver={event => event.preventDefault()} onDrop={event => reorder(panel, event.dataTransfer.getData('application/x-folderai-tab'), index)}>
+                    data-tab-drag-source={tabDrag?.source === tab.id} data-tab-drop-target={tabDrag?.target === tab.id}
+                    onDragOver={event => {
+                      event.preventDefault();
+                      if (tabDrag && tabDrag.source !== tab.id && tabDrag.target !== tab.id
+                        && panel.tabs.some(candidate => candidate.id === tabDrag.source)
+                        && event.dataTransfer.types.includes('application/x-folderai-tab')) {
+                        setTabDrag({ source: tabDrag.source, target: tab.id });
+                      }
+                    }}
+                    onDragLeave={event => {
+                      if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+                      setTabDrag(current => current?.target === tab.id ? { source: current.source } : current);
+                    }}
+                    onDrop={event => {
+                      setTabDrag(null);
+                      reorder(panel, event.dataTransfer.getData('application/x-folderai-tab'), index);
+                    }}>
                     <button id={`tab-${tab.id}`} type="button" role="tab" aria-selected={panel.active === tab.id}
                       aria-controls={`pane-${tab.id}`} className="workspace-tab" title={tab.path ?? 'Home'}
                       tabIndex={panel.active === tab.id ? 0 : -1} draggable
-                      onDragStart={event => event.dataTransfer.setData('application/x-folderai-tab', tab.id)}
+                      onDragStart={event => {
+                        event.dataTransfer.setData('application/x-folderai-tab', tab.id);
+                        setTabDrag({ source: tab.id });
+                      }}
+                      onDragEnd={() => setTabDrag(null)}
                       onClick={() => selectTab(panel, tab.id)}
                       onContextMenu={event => { event.preventDefault(); setTabMenu(tab.id); }}
                       onKeyDown={event => {
@@ -483,12 +505,12 @@ export default function Workspace() {
         };
         return <div className="tab-action-menu" key={tab.id} role="group" aria-label={strings.tabActions}
           onKeyDown={event => { if (event.key === 'Escape') dismiss(); }}>
-          <button type="button" autoFocus onClick={() => duplicateTab(panel, tab)}>{strings.duplicateTab}</button>
-          {layout.panels.length > 1 && <button type="button" onClick={() => moveTab(panel, tab)}>{strings.moveTab}</button>}
-          <button type="button" onClick={() => { closeMany(panel, tab, false); dismiss(); }}>{strings.closeOtherTabs}</button>
-          <button type="button" onClick={() => { closeMany(panel, tab, true); dismiss(); }}>{strings.closeRightTabs}</button>
-          <button type="button" onClick={() => closeTab(panel, tab.id)}>{strings.closeTab}</button>
-          <button type="button" onClick={dismiss}>{strings.cancel}</button>
+          <button type="button" autoFocus onClick={() => duplicateTab(panel, tab)}><Copy aria-hidden="true" />{strings.duplicateTab}</button>
+          {layout.panels.length > 1 && <button type="button" onClick={() => moveTab(panel, tab)}><ArrowRight aria-hidden="true" />{strings.moveTab}</button>}
+          <button type="button" onClick={() => { closeMany(panel, tab, false); dismiss(); }}><X aria-hidden="true" />{strings.closeOtherTabs}</button>
+          <button type="button" onClick={() => { closeMany(panel, tab, true); dismiss(); }}><X aria-hidden="true" />{strings.closeRightTabs}</button>
+          <button type="button" onClick={() => closeTab(panel, tab.id)}><X aria-hidden="true" />{strings.closeTab}</button>
+          <button type="button" onClick={dismiss}><X aria-hidden="true" />{strings.cancel}</button>
         </div>;
       })}
       {error && <p className="workspace-feedback" role="status">{strings.workspaceError}</p>}
